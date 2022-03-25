@@ -1,0 +1,93 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="AngularCliAddDependency" enabled="true" level="ERROR" enabled_by_default="true" />
+    <inspection_tool class="AngularInaccessibleComponentMemberInAotMode" enabled="true" level="ERROR" enabled_by_default="true" />
+    <inspection_tool class="AngularInsecureBindingToEvent" enabled="true" level="ERROR" enabled_by_default="true" />
+    <inspection_tool class="AngularInvalidExpressionResultType" enabled="true" level="ERROR" enabled_by_default="true" />
+    <inspection_tool class="AngularInvalidI18nAttribute" enabled="true" level="ERROR" enabled_by_default="true" />
+    <inspection_tool class="DuplicatedCode" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <Languages>
+        <language minSize="449" name="Python" />
+      </Languages>
+    </inspection_tool>
+    <inspection_tool class="PyBroadExceptionInspection" enabled="false" level="WEAK WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="41">
+            <item index="0" class="java.lang.String" itemvalue="jsmin" />
+            <item index="1" class="java.lang.String" itemvalue="scipy" />
+            <item index="2" class="java.lang.String" itemvalue="fastnumbers" />
+            <item index="3" class="java.lang.String" itemvalue="charset-normalizer" />
+            <item index="4" class="java.lang.String" itemvalue="numpy" />
+            <item index="5" class="java.lang.String" itemvalue="protobuf" />
+            <item index="6" class="java.lang.String" itemvalue="diff-match-patch" />
+            <item index="7" class="java.lang.String" itemvalue="PyYAML" />
+            <item index="8" class="java.lang.String" itemvalue="cffi" />
+            <item index="9" class="java.lang.String" itemvalue="httplib2" />
+            <item index="10" class="java.lang.String" itemvalue="pycparser" />
+            <item index="11" class="java.lang.String" itemvalue="requests" />
+            <item index="12" class="java.lang.String" itemvalue="mysql-connector-python" />
+            <item index="13" class="java.lang.String" itemvalue="jdcal" />
+            <item index="14" class="java.lang.String" itemvalue="bitstruct" />
+            <item index="15" class="java.lang.String" itemvalue="certifi" />
+            <item index="16" class="java.lang.String" itemvalue="lxml" />
+            <item index="17" class="java.lang.String" itemvalue="urllib3" />
+            <item index="18" class="java.lang.String" itemvalue="xadmin" />
+            <item index="19" class="java.lang.String" itemvalue="xlrd" />
+            <item index="20" class="java.lang.String" itemvalue="django-formtools" />
+            <item index="21" class="java.lang.String" itemvalue="mod-wsgi" />
+            <item index="22" class="java.lang.String" itemvalue="six" />
+            <item index="23" class="java.lang.String" itemvalue="asn1crypto" />
+            <item index="24" class="java.lang.String" itemvalue="django-crispy-forms" />
+            <item index="25" class="java.lang.String" itemvalue="tablib" />
+            <item index="26" class="java.lang.String" itemvalue="django-import-export" />
+            <item index="27" class="java.lang.String" itemvalue="cryptography" />
+            <item index="28" class="java.lang.String" itemvalue="et-xmlfile" />
+            <item index="29" class="java.lang.String" itemvalue="django-reversion" />
+            <item index="30" class="java.lang.String" itemvalue="chardet" />
+            <item index="31" class="java.lang.String" itemvalue="odfpy" />
+            <item index="32" class="java.lang.String" itemvalue="django-filter" />
+            <item index="33" class="java.lang.String" itemvalue="Django" />
+            <item index="34" class="java.lang.String" itemvalue="future" />
+            <item index="35" class="java.lang.String" itemvalue="virtualenv" />
+            <item index="36" class="java.lang.String" itemvalue="PyMySQL" />
+            <item index="37" class="java.lang.String" itemvalue="pytz" />
+            <item index="38" class="java.lang.String" itemvalue="UNKNOWN" />
+            <item index="39" class="java.lang.String" itemvalue="idna" />
+            <item index="40" class="java.lang.String" itemvalue="openpyxl" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8Inspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="E302" />
+          <option value="E501" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N806" />
+          <option value="N803" />
+          <option value="N802" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="int.iloc" />
+          <option value="int.index" />
+          <option value="bool.values" />
+          <option value="data_temp" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="SqlResolveInspection" enabled="false" level="ERROR" enabled_by_default="false" />
+  </profile>
+</component>
