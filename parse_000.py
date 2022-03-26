@@ -29,7 +29,7 @@ def to_df():
 
 if __name__ == '__main__':
     time = 22031420
-    station = 52495
+    station = 54727
     get_data(station, time)
     df = to_df()
     print('station', station, 'time', time)
@@ -126,6 +126,7 @@ if __name__ == '__main__':
     print('KO', KO)
 
     LCL = LCL_index(
+        df['pressure'].tolist(),
         df['temperature'].tolist(),
         df['dew_point'].tolist(),
     )

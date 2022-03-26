@@ -397,7 +397,6 @@ def getqvi(p, t):
 
 
 def getthe(p, t, td, q):
-    tlcl = 0
     if (td - t) >= -0.1:
         tlcl = t
     else:
@@ -607,7 +606,7 @@ def new_CAPE(p_in, t_in, td_in):
 
     narea = 0.0
     if (source == 1) or (source == 2):
-        kmax = int(kmax) - 1    # matlab索引从1开始 
+        kmax = int(kmax) - 1    # matlab索引从1开始
         k = np.fix(kmax)
         th2 = th[kmax]
         pi2 = pi[kmax]
@@ -1102,17 +1101,14 @@ def KO_index(data_press, data_temp, data_dewp):
     :param data_temp: 微波辐射计温度数据集
     :param data_dewp: 微波辐射计相对湿度数据集
     """
-    try:
-        T1000 = get_temp(1000, data_press, data_temp)
-        Td1000 = get_dewp(1000, data_press, data_dewp)
-        T850 = get_temp(850, data_press, data_temp)
-        Td850 = get_dewp(850, data_press, data_dewp)
-        T700 = get_temp(700, data_press, data_temp)
-        Td700 = get_dewp(700, data_press, data_dewp)
-        T500 = get_temp(500, data_press, data_temp)
-        Td500 = get_dewp(500, data_press, data_dewp)
-    except ValueError:
-        return 'error'
+    T1000 = get_temp(1000, data_press, data_temp)
+    Td1000 = get_dewp(1000, data_press, data_dewp)
+    T850 = get_temp(850, data_press, data_temp)
+    Td850 = get_dewp(850, data_press, data_dewp)
+    T700 = get_temp(700, data_press, data_temp)
+    Td700 = get_dewp(700, data_press, data_dewp)
+    T500 = get_temp(500, data_press, data_temp)
+    Td500 = get_dewp(500, data_press, data_dewp)
     thetae1000 = ThetaSe(T1000, Td1000, 1000)
     thetae850 = ThetaSe(T850, Td850, 850)
     thetae700 = ThetaSe(T700, Td700, 700)
@@ -1121,11 +1117,22 @@ def KO_index(data_press, data_temp, data_dewp):
     return round(KOI, 3)
 
 
-def LCL_index(data_temp, data_dewp):
-    temp_0 = data_temp[0]
-    dewp_0 = data_dewp[0]
-    lcl = 123 * (temp_0 - dewp_0)
-    return round(lcl, 3)
+def prs2height(prs):
+    return round(44331 * (1 - (prs / 1013.25) ** 0.1903), 3)
+
+def height2prs(height):
+    return round(pow(1 - height/44331, 1.0/0.1903) * 1013.25, 3)
+
+def LCL_index(data_press, data_temp, data_dewp):
+    # temp_0 = data_temp[0]
+    # dewp_0 = data_dewp[0]
+    # old = 123 * (temp_0 - dewp_0)
+    # print('old LCL', old)
+
+    T1000 = get_temp(1000, data_press, data_temp)
+    Td1000 = get_dewp(1000, data_press, data_dewp)
+    lcl = 123 * (T1000 - Td1000)
+    return height2prs(lcl)
 
 
 def TI_index(data_press, data_temp, data_dewp):
