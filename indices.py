@@ -1,22 +1,60 @@
 import math
-
-import numpy as np
-from numpy import zeros
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
 from sympy import *
+import pandas as pd
+import metpy.calc as mpcalc
+from metpy.units import units
 
 microwave_height = (0, 10, 25, 50, 75, 100, 130, 160, 190, 220, 250, 280, 310, 340, 370, 400, 430, 460, 490, 520,
                     560, 600, 640, 680, 720, 760, 800, 840, 880, 920, 960, 1000, 1040, 1080, 1120, 1160, 1200, 1260,
-                    1320,
-                    1380, 1440, 1500, 1560, 1620, 1680, 1740, 1800, 1890, 1980, 2170, 2260, 2350, 2430, 2500, 2600,
-                    2700,
-                    2800, 2900, 3000, 3100, 3200, 3300, 3400, 3500, 3650, 3800, 3950, 4100, 4250, 4400, 4550, 4600,
-                    4800,
-                    5000, 5200, 5400, 5600, 5800, 6000, 6300, 6600, 6900, 7200, 7500, 7800, 8100, 8400, 8700, 9000,
-                    9300,
-                    9600, 9800, 10000)
-K = 0.286  # python常量：约定俗成，不可更改，全部是大写字母
-C_pd = 1004
+                    1320, 1380, 1440, 1500, 1560, 1620, 1680, 1740, 1800, 1890, 1980, 2170, 2260, 2350, 2430, 2500,
+                    2600,
+                    2700, 2800, 2900, 3000, 3100, 3200, 3300, 3400, 3500, 3650, 3800, 3950, 4100, 4250, 4400, 4550,
+                    4600,
+                    4800, 5000, 5200, 5400, 5600, 5800, 6000, 6300, 6600, 6900, 7200, 7500, 7800, 8100, 8400, 8700,
+                    9000,
+                    9300, 9600, 9800, 10000)
+K = 0.286
+C_pd = 1004.675
+
+
+def CAPE_index(prs, tem, dewp):
+    try:
+        tem = get_tv(tem, prs)
+        p = pd.Series(prs).values * units.hPa
+        T = pd.Series(tem).values * units.degC
+        Td = pd.Series(dewp).values * units.degC
+        prof = mpcalc.parcel_profile(p, T[0], Td[0]).to('degC')
+        cape, cin = mpcalc.cape_cin(p, T, Td, prof, which_el='most_cape')
+        return float(str(cape).split()[0])
+    except Exception as e:
+        print(e)
+        return None
+
+
+def LFC_index(prs, tem, dewp):
+    """计算自由对流高度（CAPE的最低点）"""
+    try:
+        tem = get_tv(tem, prs)
+        p = pd.Series(prs).values * units.hPa
+        T = pd.Series(tem).values * units.degC
+        Td = pd.Series(dewp).values * units.degC
+        LFC = mpcalc.lfc(p, T, Td)
+        LFC = round(float(str(LFC[0]).split()[0]), 3)
+        return LFC
+    except Exception:
+        return None
+
+
+def get_tv(tems, prses):
+    """计算虚温"""
+    tvs = []
+    for i in range(len(tems)):
+        es = get_es(tems[i])
+        q = get_r(es, prses[i])  # 比湿
+        tv = tems[i] + 0.61 * q * tems[i]
+        tvs.append(tv)
+    return tvs
 
 
 def get_tc(t0, td0):
@@ -69,15 +107,34 @@ def r_s(P, t):
     return 0.622 * get_es(t) / P
 
 
-def get_es(t):
+def get_es(td):
     """
     求饱和水汽压，分冰面和水面,根据温度(°C)得到饱和水汽压(mb) 如果用露点代替温度则可得到水汽压 （天气分析 P5）
+    param td: 露点温度 单位℃
+    return es: 水汽压 单位hPa
     """
     # if t >= 0:     # 水面饱和水汽压的计算公式
     #     return 6.11 * 10 ** ((7.5 * t) / (237.3 + t))
     # else:        # 冰面饱和水汽压的计算公式
     #     return 6.11 * 10 ** ((9.5 * t) / (265.5 + t))
-    es = 6.112 * math.exp((17.67 * t) / (t + 243.5))  # 修正的公式
+    # es = 6.112 * math.exp((17.67 * t) / (t + 243.5))  # 修正的公式
+
+    # 焦老师提供的方法
+    # 作为水面处理
+    if td >= -15:
+        a = 17.2693882
+        b = 35.86
+    # 作为冰面处理
+    elif td <= -40:
+        a = 21.8745584
+        b = 7.66
+    # 作为水面共存处理
+    else:
+        fa = interp1d([-15, -40], [17.2693882, 21.8745584])
+        fb = interp1d([-15, -40], [35.86, 7.66])
+        a = fa(td)
+        b = fb(td)
+    es = 6.1078 * math.exp((a * td) / (273.16 + td - b))
     return es
 
 
@@ -103,299 +160,6 @@ def T_1(P1, t0, T_se_start):
     return T0 - ((T_se(P1, t0) - T_se_start) / (T_se(P1, t0) - T_se(P1, t0 - 0.1))) * 0.1 - 273.15
 
 
-def moist_adiabat(pc, tc):
-    """
-    湿绝热线
-    :param tc: 抬升凝结温度
-    :param pc: 抬升凝结压强
-    :return: 湿绝热线数据集
-    """
-    T_se_start = T_se(pc, tc)
-    T_list = [tc, ]
-    P_list = [pc, ]
-    while pc > 210:
-        t_i = tc
-        p_i = pc - 10
-        ret_T_1 = T_1(p_i, t_i, T_se_start)
-        tc = ret_T_1
-        pc = pc - 10
-        P_list.append(round(pc, 3))
-        T_list.append(round(tc, 3))
-    return P_list, T_list
-
-
-def inter_un(xi, yi, xnew):
-    """
-    插值，范围外插,(xi必须严格单调递增)
-    """
-    f = InterpolatedUnivariateSpline(xi, yi, k=1)
-    return [round(i, 3) for i in list(f(xnew))]
-
-
-def insert_moist_adiabat_data(moist_adiabat_P, moist_adiabat_T, press):
-    """得到插值后的湿绝热线温度值，与压强一一对应"""
-    xi = sorted(moist_adiabat_P)
-    yi = sorted(moist_adiabat_T)
-    moist_adiabat_data = inter_un(xi, yi, press)
-    return moist_adiabat_data
-
-
-def _rect_inter_inner(x1, x2):
-    n1 = x1.shape[0] - 1
-    n2 = x2.shape[0] - 1
-    X1 = np.c_[x1[:-1], x1[1:]]
-    X2 = np.c_[x2[:-1], x2[1:]]
-    S1 = np.tile(X1.min(axis=1), (n2, 1)).T
-    S2 = np.tile(X2.max(axis=1), (n1, 1))
-    S3 = np.tile(X1.max(axis=1), (n2, 1)).T
-    S4 = np.tile(X2.min(axis=1), (n1, 1))
-    return S1, S2, S3, S4
-
-
-def _rectangle_intersection_(x1, y1, x2, y2):
-    S1, S2, S3, S4 = _rect_inter_inner(x1, x2)
-    S5, S6, S7, S8 = _rect_inter_inner(y1, y2)
-    C1 = np.less_equal(S1, S2)
-    C2 = np.greater_equal(S3, S4)
-    C3 = np.less_equal(S5, S6)
-    C4 = np.greater_equal(S7, S8)
-    ii, jj = np.nonzero(C1 & C2 & C3 & C4)
-    return ii, jj
-
-
-def intersection(x1, y1, x2, y2):
-    ii, jj = _rectangle_intersection_(x1, y1, x2, y2)
-    n = len(ii)
-
-    dxy1 = np.diff(np.c_[x1, y1], axis=0)
-    dxy2 = np.diff(np.c_[x2, y2], axis=0)
-
-    T = np.zeros((4, n))
-    AA = np.zeros((4, 4, n))
-    AA[0:2, 2, :] = -1
-    AA[2:4, 3, :] = -1
-    AA[0::2, 0, :] = dxy1[ii, :].T
-    AA[1::2, 1, :] = dxy2[jj, :].T
-
-    BB = np.zeros((4, n))
-    BB[0, :] = -x1[ii].ravel()
-    BB[1, :] = -x2[jj].ravel()
-    BB[2, :] = -y1[ii].ravel()
-    BB[3, :] = -y2[jj].ravel()
-
-    for i in range(n):
-        try:
-            T[:, i] = np.linalg.solve(AA[:, :, i], BB[:, i])
-        except:
-            T[:, i] = np.NaN
-
-    in_range = (T[0, :] >= 0) & (T[1, :] >= 0) & (T[0, :] <= 1) & (T[1, :] <= 1)
-
-    xy0 = T[2:, in_range]
-    xy0 = xy0.T
-    return xy0[:, 0], xy0[:, 1]
-
-
-def CAPE(press, temp, mois, LFC_P=None, LFC_T=None, El_P=None, EL_T=None):
-    '''得到交点之间的数据集<=LFC_P and >= El_p'''
-    p = press[:]  # 进行列表复制，否则使用del会导致原来变量被删除
-    t = temp[:]
-    m = mois[:]
-    if LFC_P == None and LFC_T == None:
-        return 0
-    elif El_P == None and EL_T == None:
-        for i in range(len(p)):
-            if p[i] <= LFC_P:
-                p.insert(i, LFC_P)
-                t.insert(i, LFC_T)
-                m.insert(i, LFC_T)
-                del p[:i]
-                del t[:i]
-                del m[:i]
-                break
-    else:
-        for i in range(len(p)):
-            if p[i] <= LFC_P:
-                p.insert(i, LFC_P)
-                t.insert(i, LFC_T)
-                m.insert(i, LFC_T)
-                del p[:i]
-                del t[:i]
-                del m[:i]
-                break
-        for i in range(1, len(p)):
-            if p[-i] >= El_P:
-                p.insert(-i + 1, El_P)
-                t.insert(-i + 1, EL_T)
-                m.insert(-i + 1, EL_T)
-                del p[-i + 1:]
-                del t[-i + 1:]
-                del m[-i + 1:]
-                break
-
-    '''使用复合梯形规则沿给定轴积分'''
-    area1 = np.trapz(m, p)
-    # area1 = np.trapz(press, mois)
-    area2 = np.trapz(t, p)
-    # area2 = np.trapz(press, temp)
-    area = abs(area1 - area2)
-    return round(area, 3)
-
-
-def get_LfcAndElAndCape(press, temp, mois):
-    """
-    计算温度和湿绝热线交点的对应高度LFC和EL的压强
-    """
-    try:
-        index = temp.index(None) + 1
-    except:
-        index = 0
-    f1 = interp1d(press[index:], temp[index:], )
-    f2 = interp1d(press[index:], mois[index:], )
-    x1 = np.array(temp[index:])
-    y1 = np.array(press[index:])
-    x2 = np.array(mois[index:])
-    intersection_T, intersection_P = intersection(x1, y1, x2, y1)
-    data_P = []
-    data_T = []
-    if len(intersection_T) != 0:  # 判断交点距离，若距离过小，默认交点为列表最后一个交点
-        x = max(intersection_T) - min(intersection_T)
-        if x <= 1:
-            data_P.append(intersection_P[-1])
-            data_T.append(intersection_T[-1])
-        else:
-            data_P = intersection_P
-            data_T = intersection_T
-    # LFC_T, EL_T = data_T
-    # LFC_P, EL_P = data_P
-    """
-    1、交点数大于等于2
-        a、取出交点列表中的最后2个交点（压强值）
-        b、判断两交点之间所有的点对应的f2-f1的值是否大于0
-        c、大于0返回True,小于0返回False
-        d、若f2-f1都大于0，则两交点分别是El和LFC
-        e、若f2-f1不是都大于0，则最后一个交点为LFC
-    2、交点数等于1
-        a、判断该交点到小于其200压强下点之间所有点的对应f2-f1的值是否大于0
-        b、大于0返回True,小于0返回False
-        c、若都大于0，则点为LFC
-        d、若都小于0，则点为EL
-    """
-    if len(data_P) >= 2:
-        first = data_P[-1]
-        second = data_P[-2]
-        test_data = []
-        while first < second - 2:
-            first += 2
-            if f2(first) - f1(first) >= 0:
-                test_data.append(True)
-            else:
-                test_data.append(False)
-        if False in test_data:
-            cape = CAPE(press, temp, mois, data_P[-1], data_T[-1])
-            height = {
-                'LFC': data_P[-1],
-                'cape': cape
-            }
-        else:
-            cape = CAPE(press, temp, mois, data_P[-2], data_T[-2], data_P[-1], data_T[-1])
-            height = {
-                'LFC': data_P[-2],
-                "EL": data_P[-1],
-                'cape': cape
-            }
-        return height
-    elif len(data_P) == 1:
-        first = data_P[0]
-        test_data = []
-        end = first - 100
-        while first >= end:
-            first -= 2
-            if f2(first) - f1(first) >= 0:
-                test_data.append(True)
-            else:
-                test_data.append(False)
-        if False not in test_data:
-            cape = CAPE(press, temp, mois, data_P[0], data_T[0])
-            height = {
-                'LFC': data_P[0],
-                'cape': cape
-            }
-            return height
-        if True not in test_data:
-            height = {
-                'EL': data_P[0],
-                'cape': 0
-            }
-            return height
-        else:
-            height = {
-                'LFC': 9999,
-                "EL": 9999,
-                'cape': 0
-            }
-            return height
-    else:
-        height = {
-            'LFC': 9999,
-            "EL": 9999,
-            'cape': 0
-        }
-        return height
-
-
-def cape(press, dewp, t):
-    """对流有效位能"""
-    result = {
-        "unit": 'J/kg',
-        "label": "对流有效位能,根据温度列表和相对湿度列表数据，首先计算出湿绝热线，再根据其找出自由对流高度和平衡高度，取两个高度之间的积分和即cape值"
-    }
-    data = []
-    tc = get_tc(t[0], dewp)
-    pc = get_pc(t[0], press[0], tc)
-    moist_adiabat_P, moist_adiabat_T = moist_adiabat(pc, tc)
-    moist_adiabat_data = insert_moist_adiabat_data(moist_adiabat_P, moist_adiabat_T, press)  # 插值后的湿绝热线温度值
-    hei_important_data = get_LfcAndElAndCape(press, t, moist_adiabat_data)
-    meta = {
-        # "x": time,
-        "y": hei_important_data.get('cape', 0)
-    }
-    data.append(meta)
-    result["data"] = data
-    return data[0]['y']
-
-
-def getqvs(p, t):
-    getqvsresult = []
-    es = 0
-    eps = 287.04 / 461.5
-    es = 611.2 * exp(17.67 * (t - 273.15) / (t - 29.65))
-    getqvsresult = eps * es / (p - es)
-    # csnil = dbstack(1);
-    # csnil = csnil(1).name(1)
-    # ~ = '@';
-    # if csnil & & ~isempty(
-    #         inputname(2)), assignin('caller', 'FUntemp', t); evalin('caller', [inputname(2), '=FUntemp;']); end
-    # if csnil & & ~isempty(
-    #         inputname(1)), assignin('caller', 'FUntemp', p); evalin('caller', [inputname(1), '=FUntemp;']); end
-    return getqvsresult
-
-
-def getqvi(p, t):
-    getqviresult = []
-    es = 0
-    eps = 287.04 / 461.5
-    es = 611.2 * math.exp(21.8745584 * (t - 273.15) / (t - 7.66))
-    getqviresult = eps * es / (p - es)
-    # csnil=dbstack(1);
-    # csnil=csnil(1).name(1)~='@';
-    # if csnil & & ~isempty(
-    #         inputname(2)), assignin('caller', 'FUntemp', t); evalin('caller', [inputname(2), '=FUntemp;']); end
-    # if csnil & & ~isempty(
-    #         inputname(1)), assignin('caller', 'FUntemp', p); evalin('caller', [inputname(1), '=FUntemp;']); end
-    return getqviresult
-
-
 def getthe(p, t, td, q):
     if (td - t) >= -0.1:
         tlcl = t
@@ -418,366 +182,28 @@ def getthe(p, t, td, q):
     return gettheresult, p, t, td, q
 
 
-def new_CAPE(p_in, t_in, td_in):
-    """
-    计算CAPE与CIN（对流抑制）
-        p_in - 一维压力数组（mb）（实数）
-        t_in - 温度 (C) 的一维数组（实数）
-        td_in - 露点温度 (C) 的一维数组（实数）
-    """
-    source = 1
-    nk = len(p_in)
-    pinc = 100.0
-    # source = 2
-    ml_depth = 200.0
-    adiabat = 1
-    # doit = False
-    # ice = False
-    # cloud = False
-    # not_converged = False
-    # k = 0
-    kmax = 0
-    # n = 0
-    # nloop = 0
-    # i = 0
-    # orec = 0
-    p = zeros(1, nk)
-    t = zeros(1, nk)
-    td = zeros(1, nk)
-    pi = zeros(1, nk)
-    q = zeros(1, nk)
-    th = zeros(1, nk)
-    thv = zeros(1, nk)
-    z = zeros(1, nk)
-    # pt = zeros(1, nk)
-    # pb = zeros(1, nk)
-    # pc = zeros(1, nk)
-    # pn = zeros(1, nk)
-    # ptv = zeros(1, nk)
-    # the = 0
-    # maxthe = 0
-    # parea = 0
-    # narea = 0
-    # lfc = 0
-    # th1 = 0
-    # p1 = 0
-    # t1 = 0
-    # qv1 = 0
-    # ql1 = 0
-    # qi1 = 0
-    # b1 = 0
-    # pi1 = 0
-    # thv1 = 0
-    # qt = 0
-    # dp = 0
-    # dz = 0
-    # ps = 0
-    # frac = 0
-    th2 = 0
-    p2 = 0
-    t2 = 0
-    qv2 = 0
-    # ql2 = 0
-    # qi2 = 0
-    b2 = 0
-    pi2 = 0
-    thv2 = 0
-    # thlast = 0
-    # fliq = 0
-    # fice = 0
-    # tbar = 0
-    # qvbar = 0
-    # qlbar = 0
-    # qibar = 0
-    # lhv = 0
-    # lhs = 0
-    # lhf = 0
-    # rm = 0
-    # cpm = 0
-    avgth = 0
-    avgqv = 0
-    g = 9.81
-    p00 = 100000.0
-    cp = 1005.7
-    rd = 287.04
-    rv = 461.5
-    xlv = 2501000.0
-    xls = 2836017.0
-    t0 = 273.15
-    cpv = 1875.0
-    cpl = 4190.0
-    cpi = 2118.636
-    lv1 = xlv + (cpl - cpv) * t0
-    lv2 = cpl - cpv
-    ls1 = xls + (cpi - cpv) * t0
-    ls2 = cpi - cpv
-    rp00 = 1.0 / p00
-    # eps = rd / rv
-    reps = rv / rd
-    rddcp = rd / cp
-    cpdrd = cp / rd
-    cpdg = cp / g
-    converge = 0.0002
-    debug_level = 0
-
-    # 将 p,t,td 转换为 mks 单位； 得到 pi,q,th,thv
-    for k in range(nk):
-        p[k] = 100.0 * p_in[k]
-        t[k] = 273.15 + t_in[k]
-        td[k] = 273.15 + td_in[k]
-        pi[k] = (p[k] * rp00) ** rddcp
-        q[k] = getqvs(p[k], td[k])
-        th[k] = t[k] / pi[k]
-        thv[k] = th[k] * (1.0 + reps * q[k]) / (1.0 + q[k])
-    k = np.fix(nk + 1)
-
-    # 使用流体静力方程获得高度
-    z[0] = 0.0
-    for k in range(1, nk):
-        dz = -cpdg * 0.5 * (thv[k] + thv[k - 1]) * (pi[k] - pi[k - 1])
-        z[k] = z[k - 1] + dz
-    k = np.fix(nk + 1)
-
-    if source == 1:  # use surface parcel
-        kmax = 1
-    elif source == 2:
-        if p[0] < 50000.0:
-            kmax = 1
-            maxthe, p[0], t[0], td[0], q[0] = getthe(p[0], t[0], td[0], q[0])
-        else:
-            maxthe = 0.0
-            for k in range(nk):
-                if p[k] >= 50000.0:
-                    the, p[k], t[k], td[k], q[k] = getthe(p[k], t[k], td[k], q[k])
-                    if the > maxthe:
-                        maxthe = the
-                        kmax = np.fix(k)
-            k = np.fix(nk + 1)
-
-        if debug_level >= 100:
-            print('  kmax,maxthe = ', kmax, maxthe)
-    elif source == 3:
-        if (z[1] - z[0]) > ml_depth:
-            avgth = th[1]
-            avgqv = q[1]
-            kmax = 1
-        elif z[nk] < ml_depth:
-            avgth = th(nk)
-            avgqv = q(nk)
-            kmax = np.fix(nk)
-        else:
-            avgth = 0.0
-            avgqv = 0.0
-            k = 2
-            if debug_level >= 100:
-                print('  ml_depth = ', ml_depth)
-            if debug_level >= 100:
-                print('  k,z,th,q:')
-            if debug_level >= 100:
-                print(1, z[1], th[1], q[1])
-            while (z[k] <= ml_depth) & (k <= nk):
-                if debug_level >= 100:
-                    print(k, z[k], th[k], q[k])
-                avgth = avgth + 0.5 * (z[k] - z[k - 1]) * (th[k] + th[k - 1])
-                avgqv = avgqv + 0.5 * (z[k] - z[k - 1]) * (q[k] + q[k - 1])
-                k = np.fix(k + 1)
-
-            th2 = th[k - 1] + (th[k] - th[k - 1]) * (ml_depth - z[k - 1]) / (z[k] - z[k - 1])
-            qv2 = q[k - 1] + (q[k] - q[k - 1]) * (ml_depth - z[k - 1]) / (z[k] - z[k - 1])
-            if debug_level >= 100:
-                print(999, ml_depth, th2, qv2)
-            avgth = avgth + 0.5 * (ml_depth - z[k - 1]) * (th2 + th[k - 1])
-            avgqv = avgqv + 0.5 * (ml_depth - z[k - 1]) * (qv2 + q[k - 1])
-            if debug_level >= 100:
-                print(k, z(k), th(k), q(k))
-            avgth = avgth / ml_depth
-            avgqv = avgqv / ml_depth
-            kmax = 1
-        if debug_level >= 100:
-            print(avgth, avgqv)
-    else:
-        # writef(1, ['%0.15g \n']);
-        # writef(1, ['%s \n'], '  Unknown value for source');
-        # writef(1, ['%0.15g \n']);
-        # writef(1, ['%s %0.15g \n'], '  source = ', source);
-        # writef(1, ['%0.15g \n']);
-        # error(['stop encountered in original fortran code  ', char(10), ';']);
-        print("error")
-
-    narea = 0.0
-    if (source == 1) or (source == 2):
-        kmax = int(kmax) - 1    # matlab索引从1开始
-        k = np.fix(kmax)
-        th2 = th[kmax]
-        pi2 = pi[kmax]
-        p2 = p[kmax]
-        t2 = t[kmax]
-        thv2 = thv[kmax]
-        qv2 = q[kmax]
-        b2 = 0.0
-    elif source == 3:
-        k = np.fix(kmax)
-        th2 = avgth
-        qv2 = avgqv
-        thv2 = th2 * (1.0 + reps * qv2) / (1.0 + qv2)
-        pi2 = pi[kmax]
-        p2 = p[kmax]
-        t2 = th2 * pi2
-        b2 = g * (thv2 - thv[kmax]) / thv[kmax]
-
-    ql2 = 0.0
-    qi2 = 0.0
-    qt = qv2
-    cape = 0.0
-    cin = 0.0
-    lfc = 0.0
-    doit = True
-    cloud = False
-    if adiabat == 1 or adiabat == 2:
-        ice = False
-    else:
-        ice = True
-    t2_orig = t2
-    the, p2, t2, dumvar4, qv2 = getthe(p2, t2, t2, qv2)
-    # t2[dumvar4 != t2_orig] = dumvar4[dumvar4 != t2_orig]
-    if debug_level >= 100:
-        print('  the = ', the)
-    # if(debug_level>=100)
-    # writef(1,['%s \n'], '  Start loop:');
-    # writef(1,['%s %0.15g %0.15g %0.15g \n'], '  p2,th2,qv2 = ',p2,th2,qv2);
-    # end;
-
-    while doit & (k < nk-1):
-        k = int(np.fix(k + 1))
-        b1 = b2
-        dp = p[k - 1] - p[k]
-        if dp < pinc:
-            nloop = 1
-        else:
-            nloop = np.fix(1 + np.fix(dp / pinc))
-            dp = dp / nloop
-        for n in range(nloop):
-            p1 = p2
-            t1 = t2
-            pi1 = pi2
-            th1 = th2
-            qv1 = qv2
-            ql1 = ql2
-            qi1 = qi2
-            thv1 = thv2
-            p2 = p2 - dp
-            pi2 = (p2 * rp00) ** rddcp
-            thlast = th1
-            i = 0
-            not_converged = True
-            while not_converged:
-                i = np.fix(i + 1)
-                t2 = thlast * pi2
-                if ice:
-                    fliq = max(min((t2 - 233.15) / (273.15 - 233.15), 1.0), 0.0)
-                    fice = 1.0 - fliq
-                else:
-                    fliq = 1.0
-                    fice = 0.0
-                qv2 = min(qt, fliq * getqvs(p2, t2) + fice * getqvi(p2, t2))
-                qi2 = max(fice * (qt - qv2), 0.0)
-                ql2 = max(qt - qv2 - qi2, 0.0)
-                tbar = 0.5 * (t1 + t2)
-                qvbar = 0.5 * (qv1 + qv2)
-                qlbar = 0.5 * (ql1 + ql2)
-                qibar = 0.5 * (qi1 + qi2)
-                lhv = lv1 - lv2 * tbar
-                lhs = ls1 - ls2 * tbar
-                lhf = lhs - lhv
-                rm = rd + rv * qvbar
-                cpm = cp + cpv * qvbar + cpl * qlbar + cpi * qibar
-                th2 = th1 * math.exp(
-                    lhv * (ql2 - ql1) / (cpm * tbar) + lhs * (qi2 - qi1) / (cpm * tbar) + (rm / cpm - rd / cp) * log(
-                        p2 / p1))
-                # if i > 90:
-                #     print(i, th2, thlast, th2 - thlast)
-                # if i > 100:
-                #     writef(1, ['%0.15g \n'])
-                #     writef(1, ['%s \n'], '  Error:  lack of convergence')
-                #     writef(1, ['%0.15g \n'])
-                #     writef(1, ['%s \n'], '  ... stopping iteration ')
-                #     writef(1, ['%0.15g \n'])
-                #     error(['stop encountered in original fortran code  ', char(10), ' 1001;'])
-                if abs(th2 - thlast) > converge:
-                    thlast = thlast + 0.3 * (th2 - thlast)
-                else:
-                    not_converged = False
-
-            if ql2 >= 1.0e-10:
-                cloud = True
-            if adiabat == 1 or adiabat == 3:
-                qt = qv2
-                ql2 = 0.0
-                qi2 = 0.0
-            # elif adiabat <= 0 or adiabat >= 5:
-            # writef(1, ['%0.15g \n']);
-            # writef(1, ['%s \n'], '  Undefined adiabat');
-            # writef(1, ['%0.15g \n']);
-            # error(['stop encountered in original fortran code  ', char(10), ' 10000;']);
-        n = np.fix(nloop + 1)
-        thv2 = th2 * (1.0 + reps * qv2) / (1.0 + qv2 + ql2 + qi2)
-        b2 = g * (thv2 - thv[k]) / thv[k]
-        dz = -cpdg * 0.5 * (thv[k] + thv[k - 1]) * (pi[k] - pi[k - 1])
-        t2_orig = t2
-        the, p2, t2, dumvar4, qv2 = getthe(p2, t2, t2, qv2)
-        # t2[dumvar4 != t2_orig] = dumvar4[dumvar4 != t2_orig]
-        if (b2 >= 0.0) and (b1 < 0.0):
-            ps = p[k - 1] + (p[k] - p[k - 1]) * (0.0 - b1) / (b2 - b1)
-            frac = b2 / (b2 - b1)
-            parea = 0.5 * b2 * dz * frac
-            narea = narea - 0.5 * b1 * dz * (1.0 - frac)
-            # if (debug_level >= 200)
-            #     writef(1, ['%s %0.15g %0.15g \n'], '      b1,b2 = ', b1, b2);
-            # writef(1, ['%s %0.15g %0.15g %0.15g \n'], '      p1,ps,p2 = ', p(k - 1), ps, p(k));
-            # writef(1, ['%s %0.15g \n'], '      frac = ', frac);
-            # writef(1, ['%s %0.15g \n'], '      parea = ', parea);
-            # writef(1, ['%s %0.15g \n'], '      narea = ', narea);
-            cin = cin + narea
-            narea = 0.0
-        elif (b2 < 0.0) and (b1 > 0.0):
-            ps = p[k - 1] + (p[k] - p[k - 1]) * (0.0 - b1) / (b2 - b1)
-            frac = b1 / (b1 - b2)
-            parea = 0.5 * b1 * dz * frac
-            narea = -0.5 * b2 * dz * (1.0 - frac)
-            # if debug_level >= 200:
-            #     writef(1, ['%s %0.15g %0.15g \n'], '      b1,b2 = ', b1, b2)
-            #     writef(1, ['%s %0.15g %0.15g %0.15g \n'], '      p1,ps,p2 = ', p(k - 1), ps, p(k))
-            #     writef(1, ['%s %0.15g \n'], '      frac = ', frac)
-            #     writef(1, ['%s %0.15g \n'], '      parea = ', parea)
-            #     writef(1, ['%s %0.15g \n'], '      narea = ', narea)
-        elif b2 < 0.0:
-            parea = 0.0
-            narea = narea - 0.5 * dz * (b1 + b2)
-        else:
-            parea = 0.5 * dz * (b1 + b2)
-            narea = 0.0
-        cape = cape + max(0.0, parea)
-        # if (debug_level >= 200)
-        #     writef(1, [repmat(['%13.4f'], 1, 5), repmat(' ', 1, 2), '%1f' ' \n'], p2, b1, b2, cape, cin, cloud);
-        # % format(5(f13
-        # .4), 2
-        # x, l1);
-        # end;
-        if (p[k] <= 10000.0) and (b2 < 0.0):
-            doit = False
-    return round(cape, 3)
-
-
 def get_temp(press, data_press, data_temp):
-    f = interp1d(data_press, data_temp, bounds_error=False, fill_value='extrapolate')
+    f = interp1d(data_press, data_temp)
     temp = f(press)
     return temp
 
 
 def get_dewp(press, data_press, data_dewp):
-    f = interp1d(data_press, data_dewp, bounds_error=False, fill_value='extrapolate')
+    f = interp1d(data_press, data_dewp)
     dewp = f(press)
     return dewp
+
+
+def get_speed(press, data_press, data_speed):
+    f = interp1d(data_press, data_speed)
+    speed = f(press)
+    return speed
+
+
+def get_direct(press, data_press, data_direct):
+    f = interp1d(data_press, data_direct)
+    direct = f(press)
+    return direct
 
 
 def get_TT(data_press, data_temp, data_dewp):
@@ -787,39 +213,25 @@ def get_TT(data_press, data_temp, data_dewp):
     :param data_temp: 温度数据(列表)
     :param data_dewp: 露点数据(列表)
     """
-    try:
-        T500 = get_temp(500, data_press, data_temp)
-        T850 = get_temp(850, data_press, data_temp)
-        Td850 = get_dewp(850, data_press, data_dewp)
-        TT = T850 + Td850 - 2 * T500
-        return round(TT, 3)
-    except ValueError:
-        return 'error'
+    T500 = get_temp(500, data_press, data_temp)
+    T850 = get_temp(850, data_press, data_temp)
+    Td850 = get_dewp(850, data_press, data_dewp)
+    TT = T850 + Td850 - 2 * T500
+    return round(TT, 3)
 
 
 def TT_Index(data_press, data_temp, data_dewp):
     """全总指数"""
-    # height = list(microwave_height)
-    # result = {
-    #     "unit": "℃",
-    #     "label": "全总指数，根据温度列表和相对湿度列表数据计算T850(850压强下温度),Td850（850压强下露点温度），T500（500压强下温度），"
-    #              "计算公式为TT=T850+Td850-2*T500，常用于重要天气过程的指示，TT越大越容易发生强对流天气。"
-    # }
-    # list_data = []
-    # for i in range(len(lv2_11)):
-    data = get_TT(data_press, data_temp, data_dewp)
-    # meta = {
-    #     "x": time,
-    #     "y": data
-    # }
-    # list_data.append(meta)
-    # result["data"] = list_data
-    return data
+    try:
+        data = get_TT(data_press, data_temp, data_dewp)
+        return data
+    except Exception:
+        return None
 
 
 def get_r(e, p):
     """
-    获得水汽混合比 （g/g）        （天气分析 P9）
+    获得水汽混合比 （g/g）  约等于比湿q      （天气分析 P9）
     :param e:水汽压
     :param p:气压
     """
@@ -851,24 +263,45 @@ def get_rh(t, dewp, pres):
 def get_tw(t, Td, pres):
     """
     获得湿球温度（℃）
-    :param t: 气温
-    :param Td: 露点温度
-    :param pres: 气压
+    :param t: 气温 ℃
+    :param Td: 露点温度  ℃
+    :param pres: 气压  hpa
     """
-    E = get_es(t)  # 饱和水汽压
+    # 王师兄的方法
+    # E = get_es(t)  # 饱和水汽压
+    #
+    # q = get_r((E * get_rh(t, Td, pres)) / 100, pres)  # 比湿
+    # h = 1.01 * t + (2500 + 1.84 * t) * q  # 干空气比晗
+    #
+    # Tw = -100
+    # hw = -100
+    # while abs(hw - h) > 0.1:
+    #     Ew = get_es(Tw)
+    #     qw = get_r(Ew, pres)
+    #     hw = 1.01 * Tw + (2500 + 1.84 * Tw) * qw
+    #     Tw = Tw + 0.01
+    # return Tw
 
-    q = get_r((E * get_rh(t, Td, pres)) / 100, pres)  # 比湿
-    h = 1.01 * t + (2500 + 1.84 * t) * q  # 干空气比晗
+    # 直接公式计算法
+    # rh = (math.e ** ((17.625 * Td) / (243.104 + Td))) / (math.e ** ((17.625 * t) / (243.104 + t))) * 100
+    # Tw = t * math.atan(0.151977 * (rh + 8.313659) ** (1 / 2)) + math.atan(t + rh) - \
+    #      math.atan(rh - 1.676331) + 0.00391838 * (rh ** (3 / 2)) * math.atan(0.023101 * rh) - 4.686035
+    # return Tw
 
-    Tw = -100
-    hw = -100
-    while abs(hw - h) > 0.1:
-        Ew = get_es(Tw)
-        qw = get_r(Ew, pres)
-        hw = 1.01 * Tw + (2500 + 1.84 * Tw) * qw
-        Tw = Tw + 0.01
-
-    return Tw
+    # 焦老师提供的方法
+    T = t + 273.15
+    L = get_L(t)
+    r = get_r(get_es(t), pres)
+    Tw = 200
+    while Tw < 373.15:
+        es = get_es(Tw - 273.15)
+        right = T - L * (0.622 * es / (pres - es) - r) / 1004.675
+        if abs(Tw - right) < 0.3:
+            return Tw - 273.15
+        else:
+            Tw += 0.1
+    else:
+        return None
 
 
 def get_theta(t, P):
@@ -894,17 +327,20 @@ def JI_Index(data_press, data_temp, data_dewp):
         T500 = get_temp(500, data_press, data_temp)
         T700 = get_temp(700, data_press, data_temp)
         Td700 = get_dewp(700, data_press, data_dewp)
-        T850 = get_temp(850, data_press, data_temp)
-        Td850 = get_dewp(850, data_press, data_dewp)
-    except ValueError:
-        return 'error'
-    thetaw850 = get_theta(get_tw(T850, Td850, 850), 850)
-    JI = 1.6 * thetaw850 - T500 - 0.5 * (T700 - Td700) - 8
-    # result = {
-    #     "label": "杰弗森指数, 计算公式为JI=1.6*WBPT850-T500-0.5*(T700-Td700)-8, WBPT为湿球潜温",
-    #     'data': [{'x': time, 'y': round(JI, 3)}]
-    # }
-    return round(JI, 3)
+        # T850 = get_temp(850, data_press, data_temp)
+        # Td850 = get_dewp(850, data_press, data_dewp)
+        # thetaw850 = get_theta(get_tw(T850, Td850, 850), 850)
+
+        T900 = get_temp(900, data_press, data_temp)
+        Td900 = get_dewp(900, data_press, data_dewp)
+        # thetaw900 = get_theta(get_tw(T900, Td900, 900), 900)
+        Tw900 = get_tw(T900, Td900, 900)
+        Thetaw900 = Tw900 * ((1000 / 900) ** 0.286)
+        JI = 1.6 * Thetaw900 - T500 - 0.5 * (T700 - Td700) - 8
+        # JI = 1.6 * Thetaw900 - T500 - 11
+        return round(JI, 3)
+    except Exception:
+        return None
 
 
 def A_index(data_press, data_temp, data_dewp):
@@ -914,14 +350,17 @@ def A_index(data_press, data_temp, data_dewp):
     :param data_temp: 温度数据集
     :param data_dewp: 露点数据集
     """
-    T500 = get_temp(500, data_press, data_temp)
-    Td500 = get_dewp(500, data_press, data_dewp)
-    T850 = get_temp(850, data_press, data_temp)
-    Td850 = get_dewp(850, data_press, data_dewp)
-    T700 = get_temp(700, data_press, data_temp)
-    Td700 = get_dewp(700, data_press, data_dewp)
-    A = (T850 - T500) - ((T850 - Td850) + (T700 - Td700) + (T500 - Td500))
-    return round(A, 3)
+    try:
+        T500 = get_temp(500, data_press, data_temp)
+        Td500 = get_dewp(500, data_press, data_dewp)
+        T850 = get_temp(850, data_press, data_temp)
+        Td850 = get_dewp(850, data_press, data_dewp)
+        T700 = get_temp(700, data_press, data_temp)
+        Td700 = get_dewp(700, data_press, data_dewp)
+        A = (T850 - T500) - ((T850 - Td850) + (T700 - Td700) + (T500 - Td500))
+        return round(A, 3)
+    except Exception:
+        return None
 
 
 def K_index(data_press, data_temp, data_dewp):
@@ -932,13 +371,16 @@ def K_index(data_press, data_temp, data_dewp):
     :param data_dewp: 露点数据集
     :return:K指数
     """
-    T500 = get_temp(500, data_press, data_temp)
-    T700 = get_temp(700, data_press, data_temp)
-    Td700 = get_dewp(700, data_press, data_dewp)
-    T850 = get_temp(850, data_press, data_temp)
-    Td850 = get_dewp(850, data_press, data_dewp)  # 850压强下的露点温度
-    K = T850 - T500 + Td850 - T700 + Td700
-    return round(K, 3)
+    try:
+        T500 = get_temp(500, data_press, data_temp)
+        T700 = get_temp(700, data_press, data_temp)
+        Td700 = get_dewp(700, data_press, data_dewp)
+        T850 = get_temp(850, data_press, data_temp)
+        Td850 = get_dewp(850, data_press, data_dewp)  # 850压强下的露点温度
+        K = T850 - T500 + Td850 - T700 + Td700
+        return round(K, 3)
+    except Exception:
+        return None
 
 
 def SI_index(data_press, data_temp, data_dewp):
@@ -949,18 +391,23 @@ def SI_index(data_press, data_temp, data_dewp):
     :param data_dewp: 露点数据集
     :return: 沙瓦特指数
     """
-    T850 = get_temp(850, data_press, data_temp)
-    Td850 = get_dewp(850, data_press, data_dewp)
-    tc = get_tc(T850, Td850)  # 抬升凝结温度
-    pc = get_pc(T850, 850, tc)  # 抬升凝结压强
-    T500 = get_temp(500, data_press, data_temp)
-    T_se_start = T_se(pc, tc)  # 抬升凝结高度处对应的初始假相当位温
-    while pc > 500:
-        pc = pc - 1
-        ret_T_1 = T_1(pc, tc, T_se_start)
-        tc = ret_T_1
-        if pc <= 500:
-            return round(T500 - tc, 3)
+    try:
+        T850 = get_temp(850, data_press, data_temp)
+        Td850 = get_dewp(850, data_press, data_dewp)
+        tc = get_tc(T850, Td850)  # 抬升凝结温度
+        pc = get_pc(T850, 850, tc)  # 抬升凝结压强
+        T500 = get_temp(500, data_press, data_temp)
+        T_se_start = T_se(pc, tc)  # 抬升凝结高度处对应的初始假相当位温
+        while pc > 500:
+            pc = pc - 1
+            ret_T_1 = T_1(pc, tc, T_se_start)
+            tc = ret_T_1
+            if pc <= 500:
+                return round(T500 - tc, 3)
+        else:
+            return None
+    except Exception:
+        return None
 
 
 def get_press(data_hei):
@@ -982,27 +429,34 @@ def get_press(data_hei):
 
 def LI_index(data_press, data_temp, data_dewp):
     """
-    给定高度数据集和温度数据集以及相对湿度数据集，求出抬升指数
+    给定高度数据集和温度数据集以及相对湿度数据集，求出抬升指数 单位：℃
     :param data_press: 气压数据集
     :param data_temp: 温度数据集
     :param data_dewp: 露点数据集
     2019.7.6(此处的假相当位温仍就是未订正前的)
     """
-    P900 = get_press(900)  # 得到900m高度的气压
-    T = get_temp(P900, data_press, data_temp)
-    Td = get_dewp(P900, data_press, data_dewp)
-    # except ValueError:
-    #     return 'error'
-    tc = get_tc(T, Td)  # 抬升凝结温度
-    pc = get_pc(T, P900, tc)  # 抬升凝结压强
-    T500 = get_temp(500, data_press, data_temp)
-    T_se_start = T_se(pc, tc)
-    while pc > 500:
-        pc = pc - 1
-        ret_T_1 = T_1(pc, tc, T_se_start)
-        tc = ret_T_1
-        if pc <= 500:
-            return round(T500 - tc, 3)
+    try:
+        if data_press[0] > 1200:
+            return None
+
+        P900 = height2prs(900)  # 得到900m高度的气压
+        T = get_temp(P900, data_press, data_temp)
+        Td = get_dewp(P900, data_press, data_dewp)
+
+        tc = get_tc(T, Td)  # 抬升凝结温度
+        pc = get_pc(T, P900, tc)  # 抬升凝结压强
+        T500 = get_temp(500, data_press, data_temp)
+        T_se_start = T_se(pc, tc)
+        while pc > 500:
+            pc = pc - 1
+            ret_T_1 = T_1(pc, tc, T_se_start)
+            tc = ret_T_1
+            if pc <= 500:
+                return round(T500 - tc, 3)
+        else:
+            return None
+    except Exception:
+        return None
 
 
 def S_index(data_press, data_temp, data_dewp):
@@ -1078,28 +532,31 @@ def get_L(t):
 
 def ThetaSe(t, td, P):  # 2019.05.30 修改后的假相当位温计算函数
     """
-    :param t: 温度
-    :param T: 绝对温度
-    :param P_d: 系统干空气分压
-    :param r: 饱和混合比
-    :param L_v: 汽化潜热
     :return: 假相当位温
     """
-    es = get_es(t)  # 饱和水汽压
-    r = get_r(es, P)  # 将饱和水汽压代入得到饱和混合比
+    e = get_es(td)  # 水汽压
+    r = get_r(e, P)  # 起点混合比
     theta = get_theta(t, P) + 273.15
     tc = get_tc(t, td) + 273.15
+
+    # 计算抬升凝结混合比
+    # pc = get_pc(P, t, tc)
+    # tdc = get_dewp(pc, data_press, data_dewp)   # 抬升凝结露点
+    # ec = get_es(tdc)
+    # rc = get_r(ec, P)
+
     Lw = get_L(tc)
-    thetase = theta * exp((r * Lw) / (1004 * tc))
+    # Lw = 2.501 * pow(10, -6)
+    thetase = theta * exp((r * Lw) / (1004.675 * tc)) * (1 + 0.46 * r)
     return round(thetase, 3)
 
 
 def KO_index(data_press, data_temp, data_dewp):
     """
     计算KO指数，用于评估雷暴发生指数       # 根据C#程序翻译的
-    :param data_press: 微波辐射计高度数据集
-    :param data_temp: 微波辐射计温度数据集
-    :param data_dewp: 微波辐射计相对湿度数据集
+    :param data_press: 压强列表
+    :param data_temp: 温度列表
+    :param data_dewp: 露点列表
     """
     T1000 = get_temp(1000, data_press, data_temp)
     Td1000 = get_dewp(1000, data_press, data_dewp)
@@ -1120,19 +577,30 @@ def KO_index(data_press, data_temp, data_dewp):
 def prs2height(prs):
     return round(44331 * (1 - (prs / 1013.25) ** 0.1903), 3)
 
+
 def height2prs(height):
-    return round(pow(1 - height/44331, 1.0/0.1903) * 1013.25, 3)
+    return round(pow(1 - height / 44331, 1.0 / 0.1903) * 1013.25, 3)
+
+
+# def LCL_index(data_press, data_temp, data_dewp):
+#     """
+#     :param data_press: 压强列表
+#     :param data_temp: 温度列表
+#     :param data_dewp: 露点列表
+#     """
+#     # temp_0 = data_temp[0]
+#     # dewp_0 = data_dewp[0]
+#     # old = 123 * (temp_0 - dewp_0)
+#     # print('old LCL', old)
+#
+#     T1000 = get_temp(1000, data_press, data_temp)
+#     Td1000 = get_dewp(1000, data_press, data_dewp)
+#     lcl = 123 * (T1000 - Td1000)
+#     return height2prs(lcl)
 
 def LCL_index(data_press, data_temp, data_dewp):
-    # temp_0 = data_temp[0]
-    # dewp_0 = data_dewp[0]
-    # old = 123 * (temp_0 - dewp_0)
-    # print('old LCL', old)
-
-    T1000 = get_temp(1000, data_press, data_temp)
-    Td1000 = get_dewp(1000, data_press, data_dewp)
-    lcl = 123 * (T1000 - Td1000)
-    return height2prs(lcl)
+    tc = get_tc(data_temp[0], data_dewp[0])
+    return get_pc(data_temp[0], data_press[0], tc)
 
 
 def TI_index(data_press, data_temp, data_dewp):
@@ -1158,13 +626,38 @@ def IC_index(data_press, data_temp, data_dewp):
     :param data_temp: 微波辐射计温度数据集
     :param data_dewp: 微波辐射计相对湿度数据集
     """
-    T850 = get_temp(850, data_press, data_temp)
-    Td850 = get_dewp(850, data_press, data_dewp)
-    T500 = get_temp(500, data_press, data_temp)
-    Td500 = get_dewp(500, data_press, data_dewp)
-    Thetase850 = ThetaSe(T850, Td850, 850)
-    Thetase500 = ThetaSe(T500, Td500, 500)
-    Icondi = Thetase500 - Thetase850
+    try:
+        T850 = get_temp(850, data_press, data_temp)
+        Td850 = get_dewp(850, data_press, data_dewp)
+        T500 = get_temp(500, data_press, data_temp)
+        Td500 = get_dewp(500, data_press, data_dewp)
+        Thetase850 = ThetaSe(T850, Td850, 850)
+        Thetase500 = ThetaSe(T500, Td500, 500)
+        Icondi = Thetase500 - Thetase850
+        return round(Icondi, 3)
+    except Exception:
+        return None
+
+
+def BIC_index(data_press, data_temp, data_dewp):
+    """
+    最大对流稳定度指数
+    :param data_press: 微波辐射计高度数据集
+    :param data_temp: 微波辐射计温度数据集
+    :param data_dewp: 微波辐射计相对湿度数据集
+    """
+    Thetase_list = []
+    prs = data_press[0]
+    while prs >= 200:
+        T_prs = get_temp(prs, data_press, data_temp)
+        Td_prs = get_dewp(prs, data_press, data_dewp)
+        Thetase = ThetaSe(T_prs, Td_prs, prs)
+        prs -= 20
+        Thetase_list.append(Thetase)
+
+    min_Thetase = min(Thetase_list)
+    max_Thetase = max(Thetase_list)
+    Icondi = max_Thetase - min_Thetase
     return round(Icondi, 3)
 
 
@@ -1175,8 +668,111 @@ def DCI_index(data_press, data_temp, data_dewp):
     :param data_temp: 微波辐射计温度数据集
     :param data_dewp: 微波辐射计相对湿度数据集
     """
-    T850 = get_temp(850, data_press, data_temp)
-    Td850 = get_dewp(850, data_press, data_dewp)
-    LI = LI_index(data_press, data_temp, data_dewp)
-    DCI = T850 + Td850 - LI
-    return round(DCI, 3)
+    try:
+        T850 = get_temp(850, data_press, data_temp)
+        Td850 = get_dewp(850, data_press, data_dewp)
+        LI = LI_index(data_press, data_temp, data_dewp)
+        DCI = T850 + Td850 - LI
+        return round(DCI, 3)
+    except Exception:
+        return None
+
+
+def SWEAT_index(data_press, data_temp, data_dewp, data_speed, data_direct):
+    """
+    计算强天气威胁指数，乔辰炜实现
+    :param data_press: 微波辐射计高度数据集
+    :param data_temp: 微波辐射计温度数据集
+    :param data_dewp: 微波辐射计相对湿度数据集
+    :param data_speed: 微波辐射计风速数据集 单位：海里/小时
+    :param data_direct: 微波辐射计风向数据集
+    """
+    try:
+        Td850 = get_dewp(850, data_press, data_dewp)
+        # 海里转换m/s，乘2
+        V850 = get_speed(850, data_press, data_speed) * 2
+        V500 = get_speed(500, data_press, data_speed) * 2
+        if V500 > 9000 or V850 > 9000:
+            return None
+        dd850 = get_direct(850, data_press, data_direct)
+        dd500 = get_direct(500, data_press, data_direct)
+        if dd850 > 9000 or dd500 > 9000:
+            return None
+
+        TT = TT_Index(data_press, data_temp, data_dewp)
+        # if TT < 49:
+        #     SWEAT = 12 * Td850 + 2 * V850 + V500 + 125 * (math.sin(dd500 - dd850) + 0.2)
+        # else:
+        #     SWEAT = 12 * Td850 + 20 * (TT - 49) + 2 * V850 + V500 + 125 * (math.sin(dd500 - dd850) + 0.2)
+        if Td850 < 0:
+            Td850 = 0
+        if TT < 49:
+            TT = 49
+        last = 125 * (math.sin(dd500 - dd850) + 0.2)
+        if dd500 < 210 or dd500 > 310:
+            last = 0
+        if dd850 < 130 or dd850 > 250:
+            last = 0
+        if dd500 <= dd850 or V500 < 15 or V850 < 15:
+            last = 0
+        SWEAT = 12 * Td850 + 20 * (TT - 49) + 2 * V850 + V500 + last
+        return SWEAT
+    except Exception:
+        return None
+
+
+# def SWEAT_index(df, TT):
+#     """
+#     计算强天气威胁指数，焦老师提供
+#     :param df: 探空dataframe
+#     :param TT: TT指数
+#     """
+#     if not TT:
+#         return None
+#     Td_850 = df.loc[df['PRS_HWC'] == 850, 'dewpoint'].values[0]
+#     v_850 = df.loc[df['PRS_HWC'] == 850, 'WIN_S'].values[0] * 2
+#     v_500 = df.loc[df['PRS_HWC'] == 500, 'WIN_S'].values[0] * 2
+#     dd_500 = df.loc[df['PRS_HWC'] == 500, 'WIN_D'].values[0] * units.degrees
+#     dd_850 = df.loc[df['PRS_HWC'] == 850, 'WIN_D'].values[0] * units.degrees
+#     if Td_850 < 0:
+#         Td_850 = 0
+#     if TT < 49:
+#         TT = 49
+#     last = 125 * (math.sin(dd_500 - dd_850) + 0.2)
+#     if df.loc[df['PRS_HWC'] == 500, 'WIN_D'].values[0] < 210 or df.loc[df['PRS_HWC'] == 500, 'WIN_D'].values[0] > 310:
+#         last = 0
+#     if df.loc[df['PRS_HWC'] == 850, 'WIN_D'].values[0] < 130 or df.loc[df['PRS_HWC'] == 850, 'WIN_D'].values[0] > 250:
+#         last = 0
+#     if dd_500 <= dd_850 or v_500 < 15 or v_850 < 15:
+#         last = 0
+#     SWEAT = 12 * Td_850 + 20 * (TT - 49) + 2 * v_850 + v_500 + last
+#     return round(SWEAT, 2)
+
+
+# def SSI_index(data_press, data_temp, data_dewp, data_height, data_wspeed):
+#     """计算风暴强度指数"""
+#     if len(data_height) != len(data_wspeed):
+#         raise Exception("高度与风速的数组长度不一致")
+#     CAPE = CAPE_index(data_press, data_temp, data_dewp)
+#     f = interp1d(data_height, data_wspeed)
+#     # TODO
+#
+#
+# def KYI_index(data_press, data_temp, data_wspeed):
+#     """
+#     计算山崎指数
+#     """
+#     # 计算温度平流TA
+#     # lat, a, b, g0, RE = 44331, 0.1903, 9.80665, 40.45, 6372999
+#     # g1 = 9.80616 * (1 - 0.0026373 * math.cos(2 * lat) + 0.0000059 * math.cos(2 * lat) ** 2)
+#     # p, lnp = [data_height], []
+#     # for i in range(len(data_height - 1)):
+#     #     lnp1 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height[i] / (RE + data_height[i])))    # 下边界气压
+#     #     lnp2 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height(i + 1) / (RE + data_height(i + 1))))    # 上边界气压
+#     #     lnp.append(lnp1-lnp2)
+#     # p.append(lnp)
+#     # omega = 7.292 * 1e-5    # 地球自转角速度，单位：rad/s
+#     # f = 2 * omega * math.sin(lat)   # 地转参数
+#     # R = 287.05
+#     V850 = get_speed(850, data_press, data_wspeed) * 2
+#     V500 = get_speed(500, data_press, data_wspeed) * 2
