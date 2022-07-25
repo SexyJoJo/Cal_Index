@@ -721,34 +721,6 @@ def SWEAT_index(data_press, data_temp, data_dewp, data_speed, data_direct):
         return None
 
 
-# def SWEAT_index(df, TT):
-#     """
-#     计算强天气威胁指数，焦老师提供
-#     :param df: 探空dataframe
-#     :param TT: TT指数
-#     """
-#     if not TT:
-#         return None
-#     Td_850 = df.loc[df['PRS_HWC'] == 850, 'dewpoint'].values[0]
-#     v_850 = df.loc[df['PRS_HWC'] == 850, 'WIN_S'].values[0] * 2
-#     v_500 = df.loc[df['PRS_HWC'] == 500, 'WIN_S'].values[0] * 2
-#     dd_500 = df.loc[df['PRS_HWC'] == 500, 'WIN_D'].values[0] * units.degrees
-#     dd_850 = df.loc[df['PRS_HWC'] == 850, 'WIN_D'].values[0] * units.degrees
-#     if Td_850 < 0:
-#         Td_850 = 0
-#     if TT < 49:
-#         TT = 49
-#     last = 125 * (math.sin(dd_500 - dd_850) + 0.2)
-#     if df.loc[df['PRS_HWC'] == 500, 'WIN_D'].values[0] < 210 or df.loc[df['PRS_HWC'] == 500, 'WIN_D'].values[0] > 310:
-#         last = 0
-#     if df.loc[df['PRS_HWC'] == 850, 'WIN_D'].values[0] < 130 or df.loc[df['PRS_HWC'] == 850, 'WIN_D'].values[0] > 250:
-#         last = 0
-#     if dd_500 <= dd_850 or v_500 < 15 or v_850 < 15:
-#         last = 0
-#     SWEAT = 12 * Td_850 + 20 * (TT - 49) + 2 * v_850 + v_500 + last
-#     return round(SWEAT, 2)
-
-
 # def SSI_index(data_press, data_temp, data_dewp, data_height, data_wspeed):
 #     """计算风暴强度指数"""
 #     if len(data_height) != len(data_wspeed):

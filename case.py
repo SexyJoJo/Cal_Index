@@ -71,5 +71,5 @@ LFC = indices.LFC_index(pressure, temperature, dew_point)
 print('LFC', LFC)
 
 # 强天气威胁指数
-SWEAT = indices.SWEAT_index(pressure, temperature, dew_point, w_speed, w_direct)  # 参数为 探空dataframe, TT指数
+SWEAT = indices.SWEAT_index(pressure, temperature, dew_point, w_speed, w_direct)
 print('SWEAT', SWEAT)
