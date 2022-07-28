@@ -1,4 +1,6 @@
 import math
+from itertools import groupby
+
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
 from sympy import *
 import pandas as pd
@@ -730,21 +732,59 @@ def SWEAT_index(data_press, data_temp, data_dewp, data_speed, data_direct):
 #     # TODO
 #
 #
-# def KYI_index(data_press, data_temp, data_wspeed):
-#     """
-#     计算山崎指数
-#     """
-#     # 计算温度平流TA
-#     # lat, a, b, g0, RE = 44331, 0.1903, 9.80665, 40.45, 6372999
-#     # g1 = 9.80616 * (1 - 0.0026373 * math.cos(2 * lat) + 0.0000059 * math.cos(2 * lat) ** 2)
-#     # p, lnp = [data_height], []
-#     # for i in range(len(data_height - 1)):
-#     #     lnp1 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height[i] / (RE + data_height[i])))    # 下边界气压
-#     #     lnp2 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height(i + 1) / (RE + data_height(i + 1))))    # 上边界气压
-#     #     lnp.append(lnp1-lnp2)
-#     # p.append(lnp)
-#     # omega = 7.292 * 1e-5    # 地球自转角速度，单位：rad/s
-#     # f = 2 * omega * math.sin(lat)   # 地转参数
-#     # R = 287.05
-#     V850 = get_speed(850, data_press, data_wspeed) * 2
-#     V500 = get_speed(500, data_press, data_wspeed) * 2
+def KYI_index(data_press, data_temp, data_wspeed):
+    """
+    计算山崎指数
+    """
+    # 计算温度平流TA
+    # lat, a, b, g0, RE = 44331, 0.1903, 9.80665, 40.45, 6372999
+    # g1 = 9.80616 * (1 - 0.0026373 * math.cos(2 * lat) + 0.0000059 * math.cos(2 * lat) ** 2)
+    # p, lnp = [data_height], []
+    # for i in range(len(data_height - 1)):
+    #     lnp1 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height[i] / (RE + data_height[i])))    # 下边界气压
+    #     lnp2 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height(i + 1) / (RE + data_height(i + 1))))    # 上边界气压
+    #     lnp.append(lnp1-lnp2)
+    # p.append(lnp)
+    # omega = 7.292 * 1e-5    # 地球自转角速度，单位：rad/s
+    # f = 2 * omega * math.sin(lat)   # 地转参数
+    # R = 287.05
+    V850 = get_speed(850, data_press, data_wspeed) * 2
+    V500 = get_speed(500, data_press, data_wspeed) * 2
+
+
+def inver_height(height, data_temp):
+    """逆温层"""
+    all_point = []  # 出现逆温层的索引列表
+    for index, val in enumerate(data_temp):
+        if index == len(data_temp) - 1:
+            break
+        if val <= data_temp[index + 1]:
+            all_point.append(index)
+            # if val==data[index+1]:
+            #     all_point.append(index+1)
+
+    con_digits = continuous_digits(all_point)
+    delta_h, delta_t, h0 = 0, 0, None
+    for i in con_digits:
+        diff_val = round(data_temp[max(i)] - data_temp[min(i)], 2)
+        if diff_val > 1 and height[min(i)] < 1000:
+            delta_t += diff_val
+            delta_h += (height[max(i)] - height[min(i)])
+            if h0 is None:
+                h0 = height[min(i)]
+
+    return {
+        "delta_h": delta_h,
+        "delta_t": delta_t,
+        "h0": h0
+    }
+
+
+def continuous_digits(lst):
+    list_all = []
+    fun = lambda x: x[1] - x[0]
+    for k, g in groupby(enumerate(lst), fun):
+        l1 = [j for i, j in g]  # 连续数字的列表
+        if len(l1) > 1:
+            list_all.append(l1)
+    return list_all
