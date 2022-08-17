@@ -1379,6 +1379,7 @@ def inver_height_new(LV2_11):
     for i in LV2_11:
         time = i[1]
         data_temp = i[11:]
+        print(data_temp)
         meta = {
             'x': time,
             'y': []
