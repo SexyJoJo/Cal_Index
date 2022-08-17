@@ -77,6 +77,10 @@ print('LFC', LFC)
 SWEAT = indices.SWEAT_index(pressure, temperature, dew_point, w_speed, w_direct)
 print('SWEAT', SWEAT)
 
+# 山崎指数
+KYI = indices.KYI_index(pressure, temperature, dew_point, w_speed, w_direct, lat=100)
+print("KYI", KYI)
+
 # 逆温层
 inv_hei = indices.inver_height(height, temperature)
-print(inv_hei)
+print("inv_hei", inv_hei)

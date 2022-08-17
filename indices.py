@@ -1,6 +1,7 @@
 import math
 from itertools import groupby
 
+import numpy as np
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
 from sympy import *
 import pandas as pd
@@ -18,6 +19,30 @@ microwave_height = (0, 10, 25, 50, 75, 100, 130, 160, 190, 220, 250, 280, 310, 3
                     9300, 9600, 9800, 10000)
 K = 0.286
 C_pd = 1004.675
+
+
+def cal_dewp(data_temp, data_rh):
+    """
+    给定温度和相对湿度，求出露点温度（列表或单个值）
+    :param data_temp: 温度数据集
+    :param data_rh: 相对湿度数据集
+    :return: 露点温度
+    """
+    if isinstance(data_temp, list) and isinstance(data_rh, list):
+        data_dewp = []
+        list_zip = zip(data_temp, data_rh)
+        for t, f in list_zip:
+            x = 1 - 0.01 * f
+            dpd = (14.55 + 0.114 * t) * x + ((2.5 + 0.007 * t) * x) ** 3 + (15.9 + 0.117 * t) * (x ** 14)
+            Td = t - dpd
+            data_dewp.append(round(Td, 3))
+        return data_dewp
+    else:
+        x = 1 - 0.01 * data_rh
+        dpd = (14.55 + 0.114 * data_temp) * x + ((2.5 + 0.007 * data_temp) * x) ** 3 + (15.9 + 0.117 * data_temp) * (
+                x ** 14)
+        Td = data_temp - dpd
+        return round(Td, 3)
 
 
 def CAPE_index(prs, tem, dewp):
@@ -579,10 +604,30 @@ def KO_index(data_press, data_temp, data_dewp):
 def prs2height(prs):
     return round(44331 * (1 - (prs / 1013.25) ** 0.1903), 3)
 
+def bat_prs2height(pressures):
+    """
+    气压列表批量转化为高度列表
+    @param pressures: 气压列表 单位：hPa
+    @return: 高度列表 单位：m
+    """
+    heights = []
+    for prs in pressures:
+        heights.append(prs2height(prs))
+    return heights
 
 def height2prs(height):
     return round(pow(1 - height / 44331, 1.0 / 0.1903) * 1013.25, 3)
 
+def bat_height2prs(heights):
+    """
+    高度列表批量转化为气压列表
+    @param heights: 高度列表 单位：m
+    @return: 气压列表 单位：hPa
+    """
+    pressures = []
+    for height in heights:
+        pressures.append(height2prs(height))
+    return pressures
 
 # def LCL_index(data_press, data_temp, data_dewp):
 #     """
@@ -732,24 +777,48 @@ def SWEAT_index(data_press, data_temp, data_dewp, data_speed, data_direct):
 #     # TODO
 #
 #
-def KYI_index(data_press, data_temp, data_wspeed):
+def KYI_index(data_press, data_temp, data_dewp, data_wspeed, data_wdirect, lat):
     """
     计算山崎指数
+    :param data_press: 微波辐射计高度数据集
+    :param data_temp: 微波辐射计温度数据集
+    :param data_dewp: 微波辐射计相对湿度数据集
+    :param data_wspeed: 风速数据集
+    :param data_wdirect: 风向数据集
+    :param lat: unknown
     """
-    # 计算温度平流TA
-    # lat, a, b, g0, RE = 44331, 0.1903, 9.80665, 40.45, 6372999
-    # g1 = 9.80616 * (1 - 0.0026373 * math.cos(2 * lat) + 0.0000059 * math.cos(2 * lat) ** 2)
-    # p, lnp = [data_height], []
-    # for i in range(len(data_height - 1)):
-    #     lnp1 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height[i] / (RE + data_height[i])))    # 下边界气压
-    #     lnp2 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height(i + 1) / (RE + data_height(i + 1))))    # 上边界气压
-    #     lnp.append(lnp1-lnp2)
-    # p.append(lnp)
-    # omega = 7.292 * 1e-5    # 地球自转角速度，单位：rad/s
-    # f = 2 * omega * math.sin(lat)   # 地转参数
-    # R = 287.05
-    V850 = get_speed(850, data_press, data_wspeed) * 2
-    V500 = get_speed(500, data_press, data_wspeed) * 2
+    try:
+        SI = SI_index(data_press, data_temp, data_dewp)
+        # 计算温度平流TA  吴志伟提供matlab转化
+        # lat, a, b, g0, RE = 44331, 0.1903, 9.80665, 40.45, 6372999
+        # g1 = 9.80616 * (1 - 0.0026373 * math.cos(2 * lat) + 0.0000059 * math.cos(2 * lat) ** 2)
+        # p, lnp = [data_height], []
+        # for i in range(len(data_height - 1)):
+        #     lnp1 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height[i] / (RE + data_height[i])))    # 下边界气压
+        #     lnp2 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height(i + 1) / (RE + data_height(i + 1))))    # 上边界气压
+        #     lnp.append(lnp1-lnp2)
+        # p.append(lnp)
+        # omega = 7.292 * 1e-5    # 地球自转角速度，单位：rad/s
+        # f = 2 * omega * math.sin(lat)   # 地转参数
+        # R = 287.05
+
+        # 计算温度平流TA
+        w_speed850 = get_speed(850, data_press, data_wspeed)
+        w_speed500 = get_speed(500, data_press, data_wspeed)
+        w_direct850 = get_direct(850, data_press, data_wdirect)
+        w_direct500 = get_direct(500, data_press, data_wdirect)
+        TA = (0.601 * pow(10, -4)) * ((w_speed850 * w_speed500) + pow((w_speed850 - w_speed500) / 3, 2) * (
+                w_direct850 - w_direct500) * math.sin(lat/180 * math.acos(-1))) / 3600 * 100000
+
+        T850 = get_temp(850, data_press, data_temp)
+        Td850 = get_dewp(850, data_press, data_temp)
+        if TA <= SI:
+            KYI = 0
+        else:
+            KYI = (TA - SI) / (1 + (T850 - Td850))
+        return KYI
+    except Exception:
+        return None
 
 
 def inver_height(height, data_temp):
