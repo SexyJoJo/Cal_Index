@@ -230,6 +230,8 @@ def get_speed(press, data_press, data_speed):
 def get_direct(press, data_press, data_direct):
     f = interp1d(data_press, data_direct)
     direct = f(press)
+    if direct > 360:
+        return None
     return direct
 
 
@@ -789,20 +791,11 @@ def KYI_index(data_press, data_temp, data_dewp, data_wspeed, data_wdirect, lat):
     """
     try:
         SI = SI_index(data_press, data_temp, data_dewp)
-        # 计算温度平流TA  吴志伟提供matlab转化
-        # lat, a, b, g0, RE = 44331, 0.1903, 9.80665, 40.45, 6372999
-        # g1 = 9.80616 * (1 - 0.0026373 * math.cos(2 * lat) + 0.0000059 * math.cos(2 * lat) ** 2)
-        # p, lnp = [data_height], []
-        # for i in range(len(data_height - 1)):
-        #     lnp1 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height[i] / (RE + data_height[i])))    # 下边界气压
-        #     lnp2 = 1 / b * (1 - (1 / a) * (g1 / g0) * (RE * data_height(i + 1) / (RE + data_height(i + 1))))    # 上边界气压
-        #     lnp.append(lnp1-lnp2)
-        # p.append(lnp)
-        # omega = 7.292 * 1e-5    # 地球自转角速度，单位：rad/s
-        # f = 2 * omega * math.sin(lat)   # 地转参数
-        # R = 287.05
+        if SI is None:
+            return None
 
         # 计算温度平流TA
+        # ((0.601*power(10,-4))*((850_s*500_s) + power(((850_s-500_s)/3),2)) * (850_d-500_d) * sin(lat/180*ACOS(-1)))/3600 * 100000
         w_speed850 = get_speed(850, data_press, data_wspeed)
         w_speed500 = get_speed(500, data_press, data_wspeed)
         w_direct850 = get_direct(850, data_press, data_wdirect)
@@ -816,7 +809,7 @@ def KYI_index(data_press, data_temp, data_dewp, data_wspeed, data_wdirect, lat):
             KYI = 0
         else:
             KYI = (TA - SI) / (1 + (T850 - Td850))
-        return KYI
+        return round(KYI, 3)
     except Exception:
         return None
 
