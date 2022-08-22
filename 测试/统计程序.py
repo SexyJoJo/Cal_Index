@@ -39,14 +39,17 @@ def R(A, B):
 
 
 if __name__ == '__main__':
-    # time = 20210702200000
-    time = 22031420
+    time = 20210702200000
+    # time = 22031420
+    # time = 22030708
     stations = get_stations(time)
 
     result = []
     for station in stations:
         parse_000.get_data(station, time)
         df = parse_000.to_df()
+        with open("temp.txt", "r") as f:
+            meta = f.readline().split()    # 读取表头
 
         # CAPE_value = indices.CAPE(
         #     df['pressure'].tolist(),
@@ -133,6 +136,17 @@ if __name__ == '__main__':
             df['w_direct'].tolist(),
         )
         result.append(SWEAT)
+
+    #     KYI = indices.KYI_index(
+    #         df['pressure'].tolist(),
+    #         df['temperature'].tolist(),
+    #         df['dew_point'].tolist(),
+    #         df['w_speed'].tolist(),
+    #         df['w_direct'].tolist(),
+    #         lat=float(meta[2])
+    #     )
+    #     result.append(KYI)
+    # print("KYI", result)
 
     # micaps_result = get_micaps_indices("湿对流有效位能")
     # micaps_result = get_micaps_indices("总指数")
