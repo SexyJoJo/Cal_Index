@@ -32,16 +32,45 @@ def cal_dewp(data_temp, data_rh):
         data_dewp = []
         list_zip = zip(data_temp, data_rh)
         for t, f in list_zip:
-            x = 1 - 0.01 * f
-            dpd = (14.55 + 0.114 * t) * x + ((2.5 + 0.007 * t) * x) ** 3 + (15.9 + 0.117 * t) * (x ** 14)
-            Td = t - dpd
+            # x = 1 - 0.01 * f
+            # dpd = (14.55 + 0.114 * t) * x + ((2.5 + 0.007 * t) * x) ** 3 + (15.9 + 0.117 * t) * (x ** 14)
+            # Td = t - dpd
+            # data_dewp.append(round(Td, 3))
+            if t > -15.0:
+                a = 17.2693882
+                b = 35.86
+            else:
+                a = 21.3745584
+                b = 7.66
+            if f <= 2:
+                Rh = 2
+            es = 6.11 * math.exp((a * t) / (t + 273.16 - b))
+            e = f * es / 100
+            if e <= 1e-7:
+                e = 1e-7
+            Td = (273.16 * a - b * math.log(e / 6.11)) / (a - math.log(e / 6.11)) - 273.16
             data_dewp.append(round(Td, 3))
         return data_dewp
     else:
-        x = 1 - 0.01 * data_rh
-        dpd = (14.55 + 0.114 * data_temp) * x + ((2.5 + 0.007 * data_temp) * x) ** 3 + (15.9 + 0.117 * data_temp) * (
-                x ** 14)
-        Td = data_temp - dpd
+        # x = 1 - 0.01 * data_rh
+        # dpd = (14.55 + 0.114 * data_temp) * x + ((2.5 + 0.007 * data_temp) * x) ** 3 + (15.9 + 0.117 * data_temp) * (
+        #         x ** 14)
+        # Td = data_temp - dpd
+        t = data_temp
+        f = data_rh
+        if t > -15.0:
+            a = 17.2693882
+            b = 35.86
+        else:
+            a = 21.3745584
+            b = 7.66
+        if f <= 2:
+            Rh = 2
+        es = 6.11 * math.exp((a * t) / (t + 273.16 - b))
+        e = f * es / 100
+        if e <= 1e-7:
+            e = 1e-7
+        Td = (273.16 * a - b * math.log(e / 6.11)) / (a - math.log(e / 6.11)) - 273.16
         return round(Td, 3)
 
 
@@ -606,6 +635,7 @@ def KO_index(data_press, data_temp, data_dewp):
 def prs2height(prs):
     return round(44331 * (1 - (prs / 1013.25) ** 0.1903), 3)
 
+
 def bat_prs2height(pressures):
     """
     气压列表批量转化为高度列表
@@ -617,8 +647,10 @@ def bat_prs2height(pressures):
         heights.append(prs2height(prs))
     return heights
 
+
 def height2prs(height):
     return round(pow(1 - height / 44331, 1.0 / 0.1903) * 1013.25, 3)
+
 
 def bat_height2prs(heights):
     """
@@ -630,6 +662,7 @@ def bat_height2prs(heights):
     for height in heights:
         pressures.append(height2prs(height))
     return pressures
+
 
 # def LCL_index(data_press, data_temp, data_dewp):
 #     """
@@ -801,7 +834,7 @@ def KYI_index(data_press, data_temp, data_dewp, data_wspeed, data_wdirect, lat):
         w_direct850 = get_direct(850, data_press, data_wdirect)
         w_direct500 = get_direct(500, data_press, data_wdirect)
         TA = (0.601 * pow(10, -4)) * ((w_speed850 * w_speed500) + pow((w_speed850 - w_speed500) / 3, 2) * (
-                w_direct850 - w_direct500) * math.sin(lat/180 * math.acos(-1))) / 3600 * 100000
+                w_direct850 - w_direct500) * math.sin(lat / 180 * math.acos(-1))) / 3600 * 100000
 
         T850 = get_temp(850, data_press, data_temp)
         Td850 = get_dewp(850, data_press, data_temp)
