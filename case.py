@@ -84,3 +84,7 @@ print("KYI", KYI)
 # 逆温层
 inv_hei = indices.inver_height(height, temperature)
 print("inv_hei", inv_hei)
+
+# 露点温度
+dewp = indices.cal_dewp(15, 50)
+print("dewp", dewp)

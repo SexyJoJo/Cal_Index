@@ -65,7 +65,7 @@ def cal_dewp(data_temp, data_rh):
             a = 21.3745584
             b = 7.66
         if f <= 2:
-            Rh = 2
+            f = 2
         es = 6.11 * math.exp((a * t) / (t + 273.16 - b))
         e = f * es / 100
         if e <= 1e-7:
