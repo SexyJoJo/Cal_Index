@@ -1,4 +1,8 @@
+import matplotlib.pyplot as plt
+
 import indices
+import get_press
+
 
 # 高度列表
 height = [0, 10, 25, 50, 75, 100, 130, 160, 190, 220, 250, 280, 310, 340, 370, 400, 430, 460, 490,
@@ -25,74 +29,82 @@ w_speed = [2, 9999, 5, 9999, 9999, 9999, 7, 9999, 9999, 13, 9999, 9999, 9999, 99
 w_direct = [185, 9999, 190, 9999, 9999, 9999, 190, 9999, 9999, 230, 9999, 9999, 9999, 9999, 275, 9999, 9999, 9999, 9999,
             9999, 9999, 9999, 295, 9999, 9999, 9999, 310, 9999, 9999, 9999, 315, 9999, 305]
 
-# # 对流有效位能
-# CAPE = indices.CAPE_index(pressure, temperature, dew_point)
-# print('CAPE', CAPE)
-#
-# # 全总指数
-# TT = indices.TT_Index(pressure, temperature, dew_point)
-# print('TT', TT)
-#
-# # 杰弗森指数
-# JI = indices.JI_Index(pressure, temperature, dew_point)
-# print('JI', JI)
-#
-# # A指数
-# A = indices.A_index(pressure, temperature, dew_point)
-# print('A', A)
-#
-# # K指数
-# K = indices.K_index(pressure, temperature, dew_point)
-# print('K', K)
-#
-# # S指数
-# S = indices.S_index(pressure, temperature, dew_point)
-# print('S', S)
-#
-# # 抬升凝结高度
-# LCL = indices.LCL_index(pressure, temperature, dew_point)
-# print('LCL', LCL)
-#
-# # 沙氏指数
-# SI = indices.SI_index(pressure, temperature, dew_point)
-# print('SI', SI)
-#
-# # 条件性稳定度指数
-# IC = indices.IC_index(pressure, temperature, dew_point)
-# print('IC', IC)
-#
-# # 抬升指数
-# LI = indices.LI_index(pressure, temperature, dew_point)
-# print('LI', LI)
-#
-# # 深对流指数
-# DCI = indices.DCI_index(pressure, temperature, dew_point)
-# print('DCI', DCI)
-#
-# # 自由对流高度
-# LFC = indices.LFC_index(pressure, temperature, dew_point)
-# print('LFC', LFC)
-#
-# # 强天气威胁指数
-# SWEAT = indices.SWEAT_index(pressure, temperature, dew_point, w_speed, w_direct)
-# print('SWEAT', SWEAT)
-#
-# # 山崎指数
-# KYI = indices.KYI_index(pressure, temperature, dew_point, w_speed, w_direct, lat=100)   # lat为站点经度
-# print("KYI", KYI)
-#
-# # 逆温层
-# inv_hei = indices.inver_height(height, temperature)
-# print("inv_hei", inv_hei)
-#
-# # 露点温度
-# dewp = indices.cal_dewp(15, 50)
-# print("dewp", dewp)
+# 杰弗森指数
+JI = indices.JI_Index(pressure, temperature, dew_point)
+print('JI', JI)
+
+# A指数
+A = indices.A_index(pressure, temperature, dew_point)
+print('A', A)
+
+# S指数
+S = indices.S_index(pressure, temperature, dew_point)
+print('S', S)
+
+# 条件性稳定度指数
+IC = indices.IC_index(pressure, temperature, dew_point)
+print('IC', IC)
+
+# 深对流指数
+DCI = indices.DCI_index(pressure, temperature, dew_point)
+print('DCI', DCI)
+
+# 自由对流高度
+LFC = indices.LFC_index(pressure, temperature, dew_point)
+print('LFC', LFC)
+
+# 强天气威胁指数
+SWEAT = indices.SWEAT_index(pressure, temperature, dew_point, w_speed, w_direct)
+print('SWEAT', SWEAT)
+
+# 山崎指数
+KYI = indices.KYI_index(pressure, temperature, dew_point, w_speed, w_direct, lat=100)   # lat为站点经度
+print("KYI", KYI)
+
+# 逆温层
+inv_hei = indices.inver_height(height, temperature)
+print("inv_hei", inv_hei)
+
+# 露点温度
+dewp = indices.cal_dewp(15, 50)
+print("dewp", dewp)
 
 # 高度转气压
-# 旧算法, 参数:(待求气压对应高度)
-p1 = indices.get_press(100)
-print(p1)
-# 新算法, 参数:(待求气压对应高度， 待求气压对应温度， 站点海拔高度， 站点近地面气压， 站点近地面温度)
-p2 = indices.get_press2(100, 20, 0, 1013.25, 22)
-print(p2)
+# 参数:(待求气压对应高度， 待求气压对应温度， 站点海拔高度， 站点近地面气压， 站点近地面温度)
+p = get_press.get_press(100, 20, 0, 1013.25, 22)
+print("prs", p)
+
+# 抬升凝结气压，抬升凝结温度
+lcl_pressure, lcl_temperature = indices.LCL_index(pressure, temperature, dew_point)
+print('lcl_pressure', lcl_pressure)
+print('lcl_temperature', lcl_temperature)
+
+# 状态曲线
+parcel_prof = indices.cal_parcel_prof(pressure, temperature, dew_point)
+print("parcel_prof", parcel_prof)
+
+# 全总指数
+TT = indices.TT_Index(pressure, temperature, dew_point)
+print('TT', TT)
+
+# 沙氏指数
+SI = indices.SI_index(pressure, temperature, dew_point)
+print('SI', SI)
+
+# K指数
+K = indices.K_index(pressure, temperature, dew_point)
+print('K', K)
+
+# 抬升指数
+LI = indices.LI_index(pressure, temperature, parcel_prof)
+print('LI', LI)
+
+# 对流有效位能
+CAPE, CIN = indices.CAPE_index(pressure, temperature, dew_point)
+print('CAPE', CAPE)
+print('CIN', CIN)
+
+
+
+
+

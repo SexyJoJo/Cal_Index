@@ -76,13 +76,14 @@ def cal_dewp(data_temp, data_rh):
 
 def CAPE_index(prs, tem, dewp):
     try:
-        tem = get_tv(tem, prs)
+        # tem = get_tv(tem, prs)
         p = pd.Series(prs).values * units.hPa
         T = pd.Series(tem).values * units.degC
         Td = pd.Series(dewp).values * units.degC
         prof = mpcalc.parcel_profile(p, T[0], Td[0]).to('degC')
-        cape, cin = mpcalc.cape_cin(p, T, Td, prof, which_el='most_cape')
-        return float(str(cape).split()[0])
+        cape, cin = mpcalc.cape_cin(p, T, Td, prof, which_lfc='top', which_el='top')
+        # return float(str(cape).split()[0])
+        return cape, cin
     except Exception as e:
         print(e)
         return None
@@ -281,8 +282,12 @@ def get_TT(data_press, data_temp, data_dewp):
 def TT_Index(data_press, data_temp, data_dewp):
     """全总指数"""
     try:
-        data = get_TT(data_press, data_temp, data_dewp)
-        return data
+        # tt = get_TT(data_press, data_temp, data_dewp)
+        data_press = pd.Series(data_press).values * units.hPa
+        data_temp = pd.Series(data_temp).values * units.degC
+        data_dewp = pd.Series(data_dewp).values * units.degC
+        tt = mpcalc.total_totals_index(data_press, data_temp, data_dewp)
+        return tt
     except Exception:
         return None
 
@@ -430,13 +435,19 @@ def K_index(data_press, data_temp, data_dewp):
     :return:K指数
     """
     try:
-        T500 = get_temp(500, data_press, data_temp)
-        T700 = get_temp(700, data_press, data_temp)
-        Td700 = get_dewp(700, data_press, data_dewp)
-        T850 = get_temp(850, data_press, data_temp)
-        Td850 = get_dewp(850, data_press, data_dewp)  # 850压强下的露点温度
-        K = T850 - T500 + Td850 - T700 + Td700
-        return round(K, 3)
+        # T500 = get_temp(500, data_press, data_temp)
+        # T700 = get_temp(700, data_press, data_temp)
+        # Td700 = get_dewp(700, data_press, data_dewp)
+        # T850 = get_temp(850, data_press, data_temp)
+        # Td850 = get_dewp(850, data_press, data_dewp)  # 850压强下的露点温度
+        # K = T850 - T500 + Td850 - T700 + Td700
+        # return round(K, 3)
+
+        data_press = pd.Series(data_press).values * units.hPa
+        data_temp = pd.Series(data_temp).values * units.degC
+        data_dewp = pd.Series(data_dewp).values * units.degC
+        k = mpcalc.k_index(data_press, data_temp, data_dewp)
+        return k
     except Exception:
         return None
 
@@ -450,20 +461,26 @@ def SI_index(data_press, data_temp, data_dewp):
     :return: 沙瓦特指数
     """
     try:
-        T850 = get_temp(850, data_press, data_temp)
-        Td850 = get_dewp(850, data_press, data_dewp)
-        tc = get_tc(T850, Td850)  # 抬升凝结温度
-        pc = get_pc(T850, 850, tc)  # 抬升凝结压强
-        T500 = get_temp(500, data_press, data_temp)
-        T_se_start = T_se(pc, tc)  # 抬升凝结高度处对应的初始假相当位温
-        while pc > 500:
-            pc = pc - 1
-            ret_T_1 = T_1(pc, tc, T_se_start)
-            tc = ret_T_1
-            if pc <= 500:
-                return round(T500 - tc, 3)
-        else:
-            return None
+        # T850 = get_temp(850, data_press, data_temp)
+        # Td850 = get_dewp(850, data_press, data_dewp)
+        # tc = get_tc(T850, Td850)  # 抬升凝结温度
+        # pc = get_pc(T850, 850, tc)  # 抬升凝结压强
+        # T500 = get_temp(500, data_press, data_temp)
+        # T_se_start = T_se(pc, tc)  # 抬升凝结高度处对应的初始假相当位温
+        # while pc > 500:
+        #     pc = pc - 1
+        #     ret_T_1 = T_1(pc, tc, T_se_start)
+        #     tc = ret_T_1
+        #     if pc <= 500:
+        #         return round(T500 - tc, 3)
+        # else:
+        #     return None
+
+        data_press = pd.Series(data_press).values * units.hPa
+        data_temp = pd.Series(data_temp).values * units.degC
+        data_dewp = pd.Series(data_dewp).values * units.degC
+        SI = mpcalc.showalter_index(data_press, data_temp, data_dewp)
+        return SI[0]
     except Exception:
         return None
 
@@ -485,23 +502,7 @@ def get_press(data_hei):
         return round(press, 3)
 
 
-def get_press2(z2, t2, z1, p1, t1):
-    """
-    给定高度求出压强
-    :param z2: 高度
-    :param t2: z2对应温度
-    :param z1: 站台海拔
-    :param p1: 站台近地面气压
-    :param t1: 站台近地面温度
-    :return: z2对应气压
-    """
-    a = 1 / 273
-    t = (t1 + t2) / 2
-    p2 = p1 / (math.e ** ((z2 - z1) / (8000 * 1 + a * t)))
-    return round(p2, 3)
-
-
-def LI_index(data_press, data_temp, data_dewp):
+def LI_index(data_press, data_temp, parcel_prof):
     """
     给定高度数据集和温度数据集以及相对湿度数据集，求出抬升指数 单位：℃
     :param data_press: 气压数据集
@@ -510,25 +511,29 @@ def LI_index(data_press, data_temp, data_dewp):
     2019.7.6(此处的假相当位温仍就是未订正前的)
     """
     try:
-        if data_press[0] > 1200:
-            return None
-
-        P900 = height2prs(900)  # 得到900m高度的气压
-        T = get_temp(P900, data_press, data_temp)
-        Td = get_dewp(P900, data_press, data_dewp)
-
-        tc = get_tc(T, Td)  # 抬升凝结温度
-        pc = get_pc(T, P900, tc)  # 抬升凝结压强
-        T500 = get_temp(500, data_press, data_temp)
-        T_se_start = T_se(pc, tc)
-        while pc > 500:
-            pc = pc - 1
-            ret_T_1 = T_1(pc, tc, T_se_start)
-            tc = ret_T_1
-            if pc <= 500:
-                return round(T500 - tc, 3)
-        else:
-            return None
+        # if data_press[0] > 1200:
+        #     return None
+        #
+        # P900 = height2prs(900)  # 得到900m高度的气压
+        # T = get_temp(P900, data_press, data_temp)
+        # Td = get_dewp(P900, data_press, data_dewp)
+        #
+        # tc = get_tc(T, Td)  # 抬升凝结温度
+        # pc = get_pc(T, P900, tc)  # 抬升凝结压强
+        # T500 = get_temp(500, data_press, data_temp)
+        # T_se_start = T_se(pc, tc)
+        # while pc > 500:
+        #     pc = pc - 1
+        #     ret_T_1 = T_1(pc, tc, T_se_start)
+        #     tc = ret_T_1
+        #     if pc <= 500:
+        #         return round(T500 - tc, 3)
+        # else:
+        #     return None
+        data_press = pd.Series(data_press).values * units.hPa
+        data_temp = pd.Series(data_temp).values * units.degC
+        LI = mpcalc.lifted_index(data_press, data_temp, parcel_prof)
+        return LI[0]
     except Exception:
         return None
 
@@ -697,8 +702,14 @@ def bat_height2prs(heights):
 #     return height2prs(lcl)
 
 def LCL_index(data_press, data_temp, data_dewp):
-    tc = get_tc(data_temp[0], data_dewp[0])
-    return get_pc(data_temp[0], data_press[0], tc)
+    # tc = get_tc(data_temp[0], data_dewp[0])
+    # return get_pc(data_temp[0], data_press[0], tc)
+
+    data_press = pd.Series(data_press).values * units.hPa
+    data_temp = pd.Series(data_temp).values * units.degC
+    data_dewp = pd.Series(data_dewp).values * units.degC
+    lcl_pressure, lcl_temperature = mpcalc.lcl(data_press[0], data_temp[0], data_dewp[0])
+    return lcl_pressure, lcl_temperature
 
 
 def TI_index(data_press, data_temp, data_dewp):
@@ -899,3 +910,12 @@ def continuous_digits(lst):
         if len(l1) > 1:
             list_all.append(l1)
     return list_all
+
+
+def cal_parcel_prof(data_press, data_temp, data_dewp):
+    # 计算状态曲线
+    data_press = pd.Series(data_press).values * units.hPa
+    data_temp = pd.Series(data_temp).values * units.degC
+    data_dewp = pd.Series(data_dewp).values * units.degC
+    parcel_prof = mpcalc.parcel_profile(data_press, data_temp[0], data_dewp[0]).to('degC')
+    return parcel_prof
