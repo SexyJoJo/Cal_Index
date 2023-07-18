@@ -83,7 +83,7 @@ def CAPE_index(prs, tem, dewp):
         prof = mpcalc.parcel_profile(p, T[0], Td[0]).to('degC')
         cape, cin = mpcalc.cape_cin(p, T, Td, prof, which_lfc='top', which_el='top')
         # return float(str(cape).split()[0])
-        return cape, cin
+        return cape.magnitude, cin.magnitude
     except Exception as e:
         print(e)
         return None
@@ -287,7 +287,7 @@ def TT_Index(data_press, data_temp, data_dewp):
         data_temp = pd.Series(data_temp).values * units.degC
         data_dewp = pd.Series(data_dewp).values * units.degC
         tt = mpcalc.total_totals_index(data_press, data_temp, data_dewp)
-        return tt
+        return tt.magnitude
     except Exception:
         return None
 
@@ -447,7 +447,7 @@ def K_index(data_press, data_temp, data_dewp):
         data_temp = pd.Series(data_temp).values * units.degC
         data_dewp = pd.Series(data_dewp).values * units.degC
         k = mpcalc.k_index(data_press, data_temp, data_dewp)
-        return k
+        return k.magnitude
     except Exception:
         return None
 
@@ -480,7 +480,7 @@ def SI_index(data_press, data_temp, data_dewp):
         data_temp = pd.Series(data_temp).values * units.degC
         data_dewp = pd.Series(data_dewp).values * units.degC
         SI = mpcalc.showalter_index(data_press, data_temp, data_dewp)
-        return SI[0]
+        return SI[0].magnitude
     except Exception:
         return None
 
@@ -532,9 +532,12 @@ def LI_index(data_press, data_temp, parcel_prof):
         #     return None
         data_press = pd.Series(data_press).values * units.hPa
         data_temp = pd.Series(data_temp).values * units.degC
+        parcel_prof = pd.Series(parcel_prof).values * units.degC
+
         LI = mpcalc.lifted_index(data_press, data_temp, parcel_prof)
-        return LI[0]
-    except Exception:
+        return LI[0].magnitude
+    except Exception as e:
+        print(e)
         return None
 
 
@@ -709,7 +712,7 @@ def LCL_index(data_press, data_temp, data_dewp):
     data_temp = pd.Series(data_temp).values * units.degC
     data_dewp = pd.Series(data_dewp).values * units.degC
     lcl_pressure, lcl_temperature = mpcalc.lcl(data_press[0], data_temp[0], data_dewp[0])
-    return lcl_pressure, lcl_temperature
+    return lcl_pressure.magnitude, lcl_temperature.magnitude
 
 
 def TI_index(data_press, data_temp, data_dewp):
@@ -783,7 +786,8 @@ def DCI_index(data_press, data_temp, data_dewp):
         LI = LI_index(data_press, data_temp, data_dewp)
         DCI = T850 + Td850 - LI
         return round(DCI, 3)
-    except Exception:
+    except Exception as e:
+        print(e)
         return None
 
 
@@ -913,9 +917,13 @@ def continuous_digits(lst):
 
 
 def cal_parcel_prof(data_press, data_temp, data_dewp):
+    """
+    计算状态曲线
+    返回值: 无单位曲线， 有单位曲线
+    """
     # 计算状态曲线
     data_press = pd.Series(data_press).values * units.hPa
     data_temp = pd.Series(data_temp).values * units.degC
     data_dewp = pd.Series(data_dewp).values * units.degC
     parcel_prof = mpcalc.parcel_profile(data_press, data_temp[0], data_dewp[0]).to('degC')
-    return parcel_prof
+    return parcel_prof.magnitude
