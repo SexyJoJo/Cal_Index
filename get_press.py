@@ -13,5 +13,5 @@ def get_press(z2, t2, z1, p1, t1):
     """
     a = 1 / 273
     t = (t1 + t2) / 2
-    p2 = p1 / (math.e ** ((z2 - z1) / (8000 * 1 + a * t)))
+    p2 = p1 / (math.e ** ((z2 - z1) / (8000 * (1 + a * t))))
     return round(p2, 3)
