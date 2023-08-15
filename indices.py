@@ -240,25 +240,25 @@ def getthe(p, t, td, q):
 
 
 def get_temp(press, data_press, data_temp):
-    f = interp1d(data_press, data_temp)
+    f = interp1d(data_press, data_temp, bounds_error=False, fill_value="extrapolate")
     temp = f(press)
     return temp
 
 
 def get_dewp(press, data_press, data_dewp):
-    f = interp1d(data_press, data_dewp)
+    f = interp1d(data_press, data_dewp, bounds_error=False, fill_value="extrapolate")
     dewp = f(press)
     return dewp
 
 
 def get_speed(press, data_press, data_speed):
-    f = interp1d(data_press, data_speed)
+    f = interp1d(data_press, data_speed, bounds_error=False, fill_value="extrapolate")
     speed = f(press)
     return speed
 
 
 def get_direct(press, data_press, data_direct):
-    f = interp1d(data_press, data_direct)
+    f = interp1d(data_press, data_direct, bounds_error=False, fill_value="extrapolate")
     direct = f(press)
     if direct > 360:
         return None
